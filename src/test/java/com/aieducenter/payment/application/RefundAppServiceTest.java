@@ -292,8 +292,8 @@ class RefundAppServiceTest {
     }
 
     @Test
-    @DisplayName("审核拒绝：状态变为REJECTED，不调银行")
-    void auditRefund_rejected_noBankCall() {
+    @DisplayName("审核拒绝：状态变为REJECTED，不调银行，但回调业务系统")
+    void auditRefund_rejected_noBankCallButNotify() {
         configureTransactionTemplate();
 
         RefundOrder order = createPendingRefundOrder();
@@ -305,7 +305,8 @@ class RefundAppServiceTest {
 
         assertThat(order.getStatus()).isEqualTo(RefundStatus.REJECTED);
         verify(paymentGatewayPort, never()).createRefund(any(), anyString());
-        verify(businessSystemNotifier, never()).notify(anyString(), any(RefundNotifyRequest.class));
+        // 验证回调了业务系统
+        verify(businessSystemNotifier).notify(eq("https://biz.example.com/notify"), any(RefundNotifyRequest.class));
     }
 
     @Test

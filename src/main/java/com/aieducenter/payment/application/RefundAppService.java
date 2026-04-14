@@ -101,9 +101,12 @@ public class RefundAppService {
             return refundOrderRepository.save(refundOrder);
         });
 
-        // 事务外：审核通过后发起退款
         if (command.agreed()) {
+            // 审核通过后发起退款
             executeRefundAfterApproval(saved);
+        } else {
+            // 审核拒绝，回调业务系统
+            notifyRejected(saved);
         }
 
         return toResponse(saved);
@@ -280,8 +283,23 @@ public class RefundAppService {
         paymentLogRepository.save(logEntry);
     }
 
+    private void notifyRejected(RefundOrder refundOrder) {
+        RefundNotifyRequest request = new RefundNotifyRequest(
+            refundOrder.getRefundOrderNo(),
+            refundOrder.getBusinessOrderNo(),
+            refundOrder.getPaymentOrderNo(),
+            refundOrder.getStatus().getCode(),
+            refundOrder.getStatus().getName(),
+            refundOrder.getRefundAmount(),
+            refundOrder.getBankRefundNo(),
+            null,
+            refundOrder.getAttach()
+        );
+        businessSystemNotifier.notify(refundOrder.getNotifyUrl(), request);
+    }
+
     private void notifyIfTerminal(RefundOrder refundOrder) {
-        if (refundOrder.getStatus().isTerminal() && refundOrder.getStatus() != RefundStatus.REJECTED) {
+        if (refundOrder.getStatus().isTerminal()) {
             RefundNotifyRequest request = new RefundNotifyRequest(
                 refundOrder.getRefundOrderNo(),
                 refundOrder.getBusinessOrderNo(),
