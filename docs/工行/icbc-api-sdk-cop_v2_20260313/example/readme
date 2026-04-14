@@ -1,0 +1,8 @@
+本例子中提供了logback作为日志记录的例子。
+
+使用logback记录日志，需配置logback.xml配置文件(放置在classpath下)。
+同时需引用example/lib下的jar包，日志默认配置为info级别(可调整为error或debug)，保存在logs/apip.log，并输出到控制台。
+
+如果您的项目中也用到了logback，可参考本例中的logback.xml配置日志。
+如果您的项目中没有用到logback，则不建议引用example/lib中logback-classic-1.1.2.jar和logback-core-1.1.2.jar两个jar包，以免冲突。
+请按需要制定日志清理策略。

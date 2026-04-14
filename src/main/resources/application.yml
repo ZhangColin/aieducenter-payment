@@ -1,0 +1,38 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: aieducenter-payment
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  flyway:
+    enabled: true
+    table: aieducenter-payment_flyway_schema_history
+    baseline-on-migrate: true
+    baseline-version: "0"
+    locations: classpath:db/migration
+  datasource:
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+# OpenAPI 签名配置
+cartisan:
+  openapi:
+    self:
+      app-id: ${OPENAPI_APP_ID:366EIGGF0SF3DI6XSEE1EV1LF2XOZETI}
+      app-secret: ${OPENAPI_APP_SECRET:ltAiTC+gha6THssQjYOXbH8wryZfhPJoRzAYCUFXQtU=}
+    apikey-service-url: https://openapi.aieducenter.com/api/v1/api-keys/by-appId
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: never

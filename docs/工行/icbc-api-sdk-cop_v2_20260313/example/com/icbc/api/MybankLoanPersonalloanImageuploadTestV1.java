@@ -1,0 +1,106 @@
+package com.icbc.api;
+
+import java.util.Map;
+import java.util.logging.Logger;
+
+import com.icbc.api.internal.util.internal.util.fastjson.JSON;
+import com.icbc.api.request.MybankLoanPersonalloanImageuploadRequestV1;
+import com.icbc.api.request.MybankLoanPersonalloanImageuploadRequestV1.MybankLoanPersonalloanImageupload;
+import com.icbc.api.request.MybankLoanPersonalloanImageuploadRequestV1.MybankLoanPersonalloanImageuploadRequestV1Biz;
+import com.icbc.api.response.MybankLoanPersonalloanImageuploadResponseV1;
+import com.icbc.apip.config.Configure;
+import com.icbc.apip.context.WebApiContext;
+import com.icbc.apip.invoker.DefaultInvoker;
+import com.icbc.apip.invoker.Invoker.HttpMethodType;
+
+public class MybankLoanPersonalloanImageuploadTestV1 {
+	
+	 static Logger log = Logger.getLogger(MybankLoanPersonalloanImageuploadTestV1.class.getName());
+	    //估值表
+	    protected static String APP_ID = "10000000000004097438";
+	 
+	    //网关公钥
+	    protected static String APIGW_PUBLIC_KEY = "-----请使用正确的网关公钥-----D4kzEVPdOj03ctKM7KV+16bWZ5BMNgvEeuEQwfQYkRVwI9HFOGkwNTMn5hiJXHnlXYCX+zp5r6R52MY0O7BsTCLT7aHaxsANsvI9ABGx3OaTVlPB59M6GPbJh0uXvio0m1r/lTW3Z60RU6Q3oid/rNhP3CiNgg0W6O3AGqwIDAQAB";
+	    //应用私钥（与内管平台注册app时的“签名公钥”配对）
+	    protected static String PRI_KEY = "-----请使用正确的APP私钥-----EvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCoCbjsHAnWpl+DsfqSTN8B2ZWC0KSRH8qENz6XAuiuOj3RiSDg2dwwKEGUHsUjf9a/us+xfpsrZtz6ehGh5t+jf8VfGSwjfR4fAtoEN88woBViNckV4l4tjF8cqysdsxtyheCny5COUvBQgeGAzH1HqIuI/2WOpJhizA4tNCJVpn3HqZrkoip4Ja6UmRwYkcQgzfwv1L9ojFtOU5kuEPUK+i07xBP+HhGEVT7o9qWk77YHVAbHJLbcvvfYqg5mPQy4za+ZXuNfy8usGEqaUFjbG0/XfTa2lx9Hb8SwD6Al6QceiYf4HKHTfdXXqdcxGRol1LsaP93pbqI43P40YSOPAgMBAAECggEBAIp6OKKbGKCDywLEkTIvlzf3D3cWaggOot4CiNn507aA2KDs2ONzpjkpc6GVGfD/UQH/+VjUdRt3UXQ5VH6PvI0IpqaQIAe+/CuiNfhz5ZK02eptWKFoQyRWIauGg6meCGiAW3rsDty7DL/LyQJTgoqjIxprHk5G5i3E64nlBMZ/cAdjMyrbASq9kHAQd0L2GOeMloEsy7xnwoOoVeKo+MsQx49bm5y+bx0hMiACa+NulQJqNRvg/hQViVULJgnbLqWrOwyyg+sPHwXnJW3WY+r5PlplKyZ53Y3s5BUPXnouMMT+B73eMszZnBOG8DCbfrfgnr99O1E2D5SuyoXvkkECgYEA1FFL+WGyJ9UINinIT4+vlpA7DKKFhiAItMsRYL4ierJcmsbYWgLQ5VQP6YaqsdwxLgGw3T2jS7+qQvVy6/lupewxTx2b8CkzH9KLaxYlw5sQOTfhcOFeGAj1aRzyo4HFdcxi3if+F9lUyJCoIuYNO2OPYJ0/IujSHg+7EtnhxW0CgYEAypw7mrHt8Yu5a+ovhu9H5lyPJyddMW2VcLAHb8lkFyCjP2kc0bfU3wD7lQIvYTt6uky0Jx6Klfo3CWZSkvyYIp1QuPOtVSKPXvYmn8laUPy11lTQHUw7GEVxlq7keAbJE2kPgm7mwUnZEtPKXGViLhJ5ulmuIHJT7tr8iJ/hu2sCgYBij2a8WrzQPtV0B0tkm6gANe4jfGKNk9tWyhnEFh99Y8UXWI1go4QDoVVNq+UbccMmv0QyQAXJCS1prfVuU7korw9o0a7s+sMv15Y+3OYk+pu6ZBV0SDpc3/PEmtqMSpa2i22uAVS0D4CLJpPWt4KW+i25xOVlOD0qFVVbd+eVtQKBgGkcxI9s39UAeCHUTPPkD5kjS+E0OtT51R2xNSp5gMO+2vJ6xcjHZliLWfnkOFBpWzJruMrSvXMxbHwj6ZL4GLVciBRr1vDkDR1m9oLPI1wAvxWCyrVoZwAght11vnHGk2rOho1Um8KLXWK3HbTxpA3i5+QVwpByv7ibQ4hd6e4hAoGAPNx4/jkjMvOyKPKTEZP4hR8g2lSlCCA+7lW3QpplhiYa9+0OyH6vUNOKA5kJbaJ80W8H8WS2GFHzhCTpWi/UwUC5lrf2PcYWPuIs9HNGrDptaizjypPaMx5b5uZ/7ctt+tu+IQm7R8z/BKDq5S9nZTvaJuzpAHijMPqJr09BosE=";	   
+	    public static void main(String[] args) throws Exception {
+	       
+	        //DefaultIcbcClient client = new DefaultIcbcClient(APP_ID, "RSA2",PRI_KEY, APIGW_PUBLIC_KEY);
+	        DefaultIcbcClient client = new DefaultIcbcClient(APP_ID, "RSA2", PRI_KEY, "UTF-8", "json", APIGW_PUBLIC_KEY, null, (String)null, (String)null, (String)null);               	       
+	        String url = "http://ip:port/api/mybank/loan/personalloan/imageupload/V1";
+	        try {
+	            // 请求实体
+	        	MybankLoanPersonalloanImageuploadRequestV1 request = new  MybankLoanPersonalloanImageuploadRequestV1();
+	            // bizContent实体
+	        	MybankLoanPersonalloanImageuploadRequestV1Biz bizContent  = new  MybankLoanPersonalloanImageuploadRequestV1Biz();
+	        	MybankLoanPersonalloanImageupload param = new MybankLoanPersonalloanImageupload();	        	
+	        	// 公共参数
+	    		param.setSerialNo("12334455");
+	    		param.setAppNo("F-APIP");
+	    		param.setAreaCode("");
+	    		param.setEmployeeCode("");
+	    		param.setLanguage("zh_CN");
+	    		param.setTransNo("MybankLoanPersonalloanImageupload");
+	    		param.setVer("1.0");
+	    		param.setTurnPageFlag("");
+	    		param.setBeginRow("");
+	    		param.setRowCount("");	    		
+	    		//私有入参
+	        	param.setCooperCode("666666");	        
+	        	param.setBankNo("325555");
+	        	param.setCooperPK("123456");
+	        	param.setFileId("12233");
+	        	param.setFileName("解压.doc");
+	        	param.setFileClob("1233");	                	
+	            bizContent.setParam(param);                                                                 	           	            
+	            request.setServiceUrl(url);
+	            request.setBizContent(bizContent);	            	     
+	            log.info("response:" + JSON.toJSONString(request));
+	            MybankLoanPersonalloanImageuploadResponseV1 response = client.execute(request);
+	            log.info("response:" + JSON.toJSONString(response));
+	            boolean flag=response.isSuccess();
+	            if (flag) {
+	                // 业务成功处理
+	                log.info("success");//
+	            } else {
+	                // 失败
+	                log.info("error");
+	            }	                    
+	        } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+	            	            	        
+	            	            
+	            
+	         //http://ip:port/api
+//	        String req_json = JSON.toJSONString(param);
+//	        Configure configure = new Configure();
+//	  		configure.setAppId(APP_ID);
+//	  		configure.setUserPrivateLoc("D:\\apikey\\icbc_sign_service(sdk).pri");
+//	  		configure.setSysPubkeyLoc("D:\\apikey\\API_GATEWAY.pub");
+//	  		configure.setSysBaseUri("http://ip:port/api");
+//	  		configure.setAlgo(com.icbc.apip.token.SignatureAlgo.RSA2048);
+//	  		//configure.setSysAuthMaxTimeStep(Long.MAX_VALUE);
+//	  		WebApiContext context = new WebApiContext();
+//	  		context.setConfigure(configure);
+//	  		context.init();
+
+//	  		DefaultInvoker invoker = context.getDefaultInvoker();
+//	  		invoker.setUri("/mybank/loan/personalloan/imageupload/V1");
+//	  		invoker.setSendEncoding("utf-8");
+//	  		invoker.addParameter("biz_content", req_json);
+//	  		System.out.println("invoker:::"+invoker);
+//	  		invoker.setMethod(HttpMethodType.POST);
+//	  		Map<String, Object> resp = null;
+//	  		try {
+//	  			resp = invoker.syncInvoke();
+//	  			System.out.println(resp);
+//	  		} catch (Exception e) {
+//	  			e.getMessage();
+//	  			e.printStackTrace();
+//	  		}/
+	          	            	            	            	            
+	       
+	    }
+
+}

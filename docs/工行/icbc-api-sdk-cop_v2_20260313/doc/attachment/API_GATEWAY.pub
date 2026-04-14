@@ -1,0 +1,8 @@
+key generate algorithm: RSA
+key size: 1024
+##############start public key##############
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCwFgHD4kzEVPdOj03ctKM7KV+16
+bWZ5BMNgvEeuEQwfQYkRVwI9HFOGkwNTMn5hiJXHnlXYCX+zp5r6R52MY0O7BsTCL
+T7aHaxsANsvI9ABGx3OaTVlPB59M6GPbJh0uXvio0m1r/lTW3Z60RU6Q3oid/rNhP
+3CiNgg0W6O3AGqwIDAQAB
+##############end public key##############

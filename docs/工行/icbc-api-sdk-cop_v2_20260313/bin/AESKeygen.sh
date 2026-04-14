@@ -1,0 +1,1 @@
+java -cp ../lib/icbc-api-sdk-cop.jar com.icbc.api.AESKeyGen 128

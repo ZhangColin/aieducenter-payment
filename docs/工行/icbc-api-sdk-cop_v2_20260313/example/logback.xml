@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="30 seconds">
+
+	<contextListener class="ch.qos.logback.classic.jul.LevelChangePropagator">
+		<resetJUL>true</resetJUL>
+	</contextListener>
+
+	<property name="ENCODER_PATTERN"
+		value="%d{yyyyMMdd HH:mm:ss.SSS} [%thread] %-5level %logger{80} - %m%n" />
+	<property name="MAX_FILE_COUNT" value="1000000" />
+	<property name="MAX_FILE_SIZE" value="10MB" />
+
+	<appender class="ch.qos.logback.core.rolling.RollingFileAppender"
+		name="apipAppender">
+		<file>logs/apip.log</file>
+		<encoder>
+			<pattern>${ENCODER_PATTERN}</pattern>
+		</encoder>
+		<rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+			<fileNamePattern>${LOG_PATH}/${SERVER_FILE_NAME}.%i.log
+			</fileNamePattern>
+			<minIndex>1</minIndex>
+			<maxIndex>${MAX_FILE_COUNT}</maxIndex>
+		</rollingPolicy>
+		<triggeringPolicy
+			class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+			<maxFileSize>${MAX_FILE_SIZE}</maxFileSize>
+		</triggeringPolicy>
+	</appender>
+
+	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>${ENCODER_PATTERN}</pattern>
+		</encoder>
+	</appender>
+
+	<logger additivity="false" name="com.icbc.api">
+		<level value="info" />
+		<appender-ref ref="apipAppender" />
+		<appender-ref ref="console" />
+	</logger>
+
+</configuration>

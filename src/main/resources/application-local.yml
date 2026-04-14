@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aieducenter
+    username: aiedu
+    password: dev123
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+spring.jpa.show-sql: true
+
+# 工行支付网关配置
+gateway:
+  icbc:
+    env: local
+    app-id: ${ICBC_APP_ID:11000000000000079872}
+    mer-id: ${ICBC_MER_ID:020004161912}
+    mer-prtcl-no: ${ICBC_MER_PRTL_NO:0200041619120201}
+    private-key: ${ICBC_PRIVATE_KEY:MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCcuLg1/44hdfA6bnj46U9gq8BqguKGmveGS6Fne4qa5Idk4BjMn6KII3gpAEw85EI75OVF2S+uEOlIXBkeuwPEliMbpKZ1BiXyfSryEmi4gUk6JEPrHE6bzWBvyTtr3ff5Cp1jB7EXQ3aOYSE6R2gBVrnODifpAXSONFYywHy8W/OPNga4MhEyJ0rD1CMtU8MNc/0zTcDXLBJ+WJN7kUlwdrnAd1IPOXYhCCEzMeB1NpQVV1SqxOADEUMJOrKmbXX/2Jal6HfuyNXZ6V9pCL5FucTgCyiXg0tIyPMOxjlsVDWSSadQeRB9gU/m1vcbM5DdkBOaBw4JmxAFgd3RqPKdAgMBAAECggEAAlYAgjwzu/ecOTVnU90fuUL7bxBSBwvtROZWBWBX3F+BTcrHToQnRzHcJc74KUTaYIvUsln+i3DQwVWEwaqrmjUGA0X3fdwLGcEC2wZ/jWx5O8bJml9azpiyPMhPke0w4oM60vyM3QS853oMJZMQj6CMIXBK6P6uuZCPI6+Edxw+ccosIY6f9t3oypRgsUM8QPhOmjCIl4kN0/U9DEdHQ2OgE/suUGt5NYPlyFqf1aHn2T+l7XsFhluezbMIHruFTVXr/S+EHx0Hs6fHUZtwwEVm2dsZBZzpt6LuzWD/uM6hDrWLoheU36ikT8Obsl0Bv7VnzcrILWSO0NMgBG9iEwKBgQDQfGD4CTsDHrUR+6xH8fZy0v9LxunIm8xXOo2mnG4tbNJfYSrfW+/nww0FXiK+IWDAXMyKxKS/ExjlaLgvQ5T2BDyMuUbsxi/a7XT3feC8B+WTMkixu+qbM7nZUb3oBMEcySw8ZP2x4JORXCKPBGNh5iMb1LuqjJYrUAslKTDdkwKBgQDAcEYTFBnnpBlWktLUjlQ5VKWjRb45HsUaAB4AFfSf4SpHsZCYt8xW8SZQ7FILPdh/Ezg70pIg1oLfLmCUIhPDPeYIUuGVTT9xoxRzb5vs08fum7vbcB7ef+arljXvhzF3kReP94ZMVgjKAp+VCrRf36rxx1Mr4ikiuC/1tHaNDwKBgEQMhN4QrTlMeY+AFPB6spUx93A1YbM/3weNrhR2tKORBG1rWsIC0SBVktdwrWhfnqPK5lxY6OkRA6xFbPDIX0OZiGXqR5Ma8R3FKctqQ8M71Jwh6oZQrrevv3aGbrTfcGTD6PNhh0ja42+rogAKT6Hxqv33hrWZI57Jhom/kxqPAoGASZTkhnkCKrtpYNwFN3cwpzdBmnuZb7ffP8DZt8itX9C13PH9SxfET14n+3tRJ7E/Ld/Ieb9bVqkPI41VKm8ZRWdOpNIkJXWDE816jWUYpuaXpRnxK8fkVclsByIJf4wfEwvsiYTo2hlvhOaZ5GBSdfJNJ+PCXp48gmURGY8mYWsCgYA7kVzsEzT4MRzA6CQbWaj82hDaVlU26i2Wsw+5lkMImKxwMPuJyz8CBjbm0mEE6ZMfQCIwndBfp16uhJHuW9M6kJipGxiS/OGsZhIJnrNDuYHiVzT6dyKFybyCij7DbzaRgZ5dPOiQVGgFcWZjFxasDytni/k76zgoqOyaDtDpfg==}
+    public-key: ${ICBC_PUBLIC_KEY:MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCMpjaWjngB4E3ATh+G1DVAmQnIpiPEFAEDqRfNGAVvvH35yDetqewKi0l7OEceTMN1C6NPym3zStvSoQayjYV+eIcZERkx31KhtFu9clZKgRTyPjdKMIth/wBtPKjL/5+PYalLdomM4ONthrPgnkN4x4R0+D4+EBpXo8gNiAFsNwIDAQAB}
+    notify-base-url: ${ICBC_NOTIFY_BASE_URL:http://localhost:8081}
+    payment-url: ${ICBC_PAYMENT_URL:https://gw.open.icbc.com.cn/api/cardbusiness/qrcode/consumption/V1}
+    payment-query-url: ${ICBC_PAYMENT_QUERY_URL:https://gw.open.icbc.com.cn/api/cardbusiness/aggregatepay/b2c/online/orderqry/V1}
+    refund-url: ${ICBC_REFUND_URL:https://gw.open.icbc.com.cn/api/cardbusiness/aggregatepay/b2c/online/merrefund/V1}
+    refund-query-url: ${ICBC_REFUND_QUERY_URL:https://gw.open.icbc.com.cn/api/cardbusiness/aggregatepay/b2c/online/refundqry/V1}
+
+# 支付默认配置
+payment:
+  default-expired-seconds: 3600
+
+# 过期订单定时任务
+scheduler:
+  payment-expiration: "0 */5 * * * *"
+  refund-query: "0 */5 * * * *"

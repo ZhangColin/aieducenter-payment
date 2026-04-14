@@ -1,0 +1,58 @@
+package com.icbc.api;
+
+import com.icbc.api.request.InvestmentAssetmanagementPurchaseconfirmationqueryRequestV1;
+import com.icbc.api.request.InvestmentAssetmanagementPurchaseconfirmationqueryRequestV1.InvestmentAssetmanagementPurchaseconfirmationqueryRequestV1Biz;
+import com.icbc.api.response.InvestmentAssetmanagementPurchaseconfirmationqueryResponseV1;
+
+import java.util.logging.Logger;
+
+
+public class InvestmentAssetmanagementPurchaseconfirmationqueryTest {
+	static Logger log = Logger.getLogger(InvestmentAssetmanagementPurchaseconfirmationqueryTest.class.getName());
+	/**
+	 * appID
+	 */
+	protected static final String APP_ID = "xxxxxxxxxxxxxxxxx";
+	protected static String BASE_URL = "http://ip:port/api";
+	/**
+	 * 网关公钥
+	 */
+	protected static final String APIGW_PUBLIC_KEY = "-----请使用正确的APP私钥-----BIjANBgkqhkiG9w0BAQEFAAOCAQ8A-----请使用正确的APP私钥-----BCgKCAQEAkUgg6vmbfp2xt3+OLs5pfSoS3SK/CJ2KuCv6BwhWZPCazq94C0ccQwyUB4H/+RTj2Lkb50HnWFqOT53+DXSv3pVECtKwhWhtPr9V1kIxgYHbdqjo570YEEjZACp6ERtJDPl847rx3RiFLrZVmzTdKTC0CmJelGLEGW4VnHLlSLspS3wHePAoSflWV/gLBPYqv82MoRlwn0LiadhkgAbQMbKyNsrtFx/ve+qnR26rH2XLFT2Pf3GCY2H3Hjm3dFenuS0BeZl7a310pGKUpeFS8Vfcb4F96KcM2Yb2F1sUfrIQyGDpfD1+CkMTiIQK9HzkqkCHNIttmBbRuyPnDgJq7wIDAQAB";
+	/**
+	 * 应用私钥
+	 */
+	protected static final String PRI_KEY = "-----请使用正确的APP私钥-----EvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCRSCDq+Zt+nbG3f44uzml9KhLdIr8InYq4K/oHCFZk8JrOr3gLRxxDDJQHgf/5FOPYuRvnQedYWo5Pnf4NdK/elUQK0rCFaG0+v1XWQjGBgdt2qOjnvRgQSNkAKnoRG0kM+XzjuvHdGIUutlWbNN0pMLQKYl6UYsQZbhWccuVIuylLfAd48ChJ+VZX+AsE9iq/zYyhGXCfQuJp2GSABtAxsrI2yu0XH+976qdHbqsfZcsVPY9/cYJjYfceObd0V6e5LQF5mXtrfXSkYpSl4VLxV9xvgX3opwzZhvYXWxR+shDIYOl8PX4KQxOIhAr0fOSqQIc0i22YFtG7I+cOAmrvAgMBAAECggEAZau8nbShBTMGtAwoTMlXOajAGtG+LyFReyILj/BdxbY8IHjb4ciaFrIuxjJMGNxtt7WTuXt9k2+MOFuw92m5ymNbgtd/gV1bVpZAU/lu+9sM4zXCCKtks8DHXD5dvqsBrHrM0/J4YOpQCijAMCYGwFS9Kqc82UtlQQaxSRN/Mi35cSGrtgIsvjflA3bLqXkn29Gawy1CmOa1AmC9aQSHK+TTql/NnGoa3BMe01FtMuazWYi9bk9roiyjjtLSQRYNHut1y5gciCNONRG1XwYc0dsCU13nVaj/M4ssHy96VrzwQdIHEgULmWFUd/kcQBxmWaRf/86OSN/0iLAQbeuwwQKBgQDWy9Yop6ElFRmVAK9EQUaKFzbkTaozMnZgghp9KgsyTqVndoB4mpeXQYNIV+RyBZf1Wk3nWDfWNQi1IrCGNLLQk4WzCloEfDzc+yh/LqYCk/mIUJEe2BVXynRodaeoS3QwqLYvE9H5NEAgczf2SB4MR/S6kc/J7svKPURzD0H77QKBgQCtJpdJRiJ6NOSPT1v7f72kM/1Hn7P5eOSK9sIOwV1GAYcy//KfBJgciUYK/s9jith45MxuSYl1P36C+qbhkIKZ2rimfz7iJZjK91OoJjXYPwytnbWuZQHwjpch0wXvLfoB44zZjbpBuuyALopChqJqO+xdeBjAx1rZ5YiBiVV+ywKBgGnkYbb3NQ1oAo2focg/efwYB7qzwyWsSgm3+kEcWhq6BPclx54tcHBkHsmqcvf3Y/vUQjW8GwLicGGEMYxoLIOBRteGUeyGJyc2NrfEkpkQxGL8fR68noECUTMyVa41TJm0guRgnBKEPN0CkGM9GHsrei4ENnEx5YvVeopSyk/dAoGAGtRu/siiUQNfIyGt5BOQJCB2L6H8djyYVTwVJ8oolM9pzqpAQwmoNEvFEbEYG5mJH3p8ft5gMU3MYalLMIp+4i41DH+NE+e1fEXErbp1/3MNmN1mKIa4PTkrC++x7LTYF3DWA2Plp4e6W8ZaYCKSihmM75LLaxu45Sie9Ut9du8CgYEAgxJT08BlWVqAdOktv3RtHyh/Hkf/msG384Sf0I6/2f47FC2eUvNID4o+32du2Usx8by5mnAW3gZy0L6Gns/H4DF/P5ijJjjijlbFPzjA4pxrHmoIGwvoAGyGSJp5XmpZNwT7ogiE/H91fXAntkmfhhujnD7XTO23qt8dvLN5tFw=";
+
+	public static void main(String[] args) throws Exception {
+		DefaultIcbcClient client = new DefaultIcbcClient(APP_ID, PRI_KEY, APIGW_PUBLIC_KEY);
+		try {
+			String URI = "investment/assetmanagement/purchaseconfirmationquery/V1";
+			// 请求实体
+			InvestmentAssetmanagementPurchaseconfirmationqueryRequestV1 request = new InvestmentAssetmanagementPurchaseconfirmationqueryRequestV1();
+			// bizContent实体
+			InvestmentAssetmanagementPurchaseconfirmationqueryRequestV1Biz bizContent = new InvestmentAssetmanagementPurchaseconfirmationqueryRequestV1Biz();
+
+			// 请求报文IN节点实体 设置属性
+			bizContent.settASerialNo("4501");
+			
+			// bizContent实体 设置属性
+			request.setServiceUrl(BASE_URL + "/" + URI);
+			// 请求实体 设置属性
+			request.setBizContent(bizContent);
+			// 输出支付指令提交响应对象，需根据实际调用服务更换（InvestmentFundoutsourceValuationreportqueryResponseV1）
+			InvestmentAssetmanagementPurchaseconfirmationqueryResponseV1 response = client.execute(request);
+			if (response.isSuccess()) {
+				// 业务成功处理
+				log.info("申购查询业务处理成功");
+				log.info(response.getReturnContent().toString());
+			} else {
+				// 失败
+				log.info("申购查询业务处理失败");
+				log.info(response.getReturnCode()+","+response.getReturnMsg());
+			}
+		} catch (Exception e) {
+			log.info(e.getMessage());
+		}
+	}
+
+}
