@@ -130,13 +130,55 @@ class RefundAppServiceTest {
         when(refundOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         CreateRefundCommand command = new CreateRefundCommand(
-            "BIZ001", "PAY001", 10000L, "取消", null, "https://biz.example.com/refund-notify"
+            "BIZ001", "PAY001", 10000L, "取消", null, "https://biz.example.com/refund-notify", true
         );
 
         RefundOrderResponse response = service.createRefund(command, "TestSystem");
 
         assertThat(response).isNotNull();
         assertThat(response.notifyUrl()).isEqualTo("https://biz.example.com/refund-notify");
+    }
+
+    @Test
+    @DisplayName("创建退款订单：needAudit=false时自动审核通过并退款")
+    void createRefund_needAuditFalse_autoApproveAndRefund() {
+        configureTransactionTemplate();
+
+        PaymentOrder paymentOrder = createPaidPaymentOrder();
+        when(paymentOrderRepository.findByPaymentOrderNo("PAY001")).thenReturn(Optional.of(paymentOrder));
+        when(refundOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentGatewayPort.createRefund(any(), anyString()))
+            .thenReturn(new CreateRefundResponse(true, "0", "success", "ICBC_REFUND_002", 100L));
+        when(paymentGatewayPort.queryRefund(any(), any(), any(), any()))
+            .thenReturn(new QueryRefundResponse(true, "0", "success", RefundStatus.SUCCESS, 10000L, 10000L, "2026-04-14 10:00:00", "ICBC_REFUND_002", 50L));
+
+        CreateRefundCommand command = new CreateRefundCommand(
+            "BIZ001", "PAY001", 10000L, "取消", null, "https://biz.example.com/refund-notify", false
+        );
+
+        RefundOrderResponse response = service.createRefund(command, "TestSystem");
+
+        // 验证状态为退款成功（说明自动审核通过了）
+        assertThat(response.status()).isEqualTo(5); // SUCCESS
+        // 验证回调了业务系统
+        verify(businessSystemNotifier).notify(eq("https://biz.example.com/refund-notify"), any(RefundNotifyRequest.class));
+    }
+
+    @Test
+    @DisplayName("创建退款订单：needAudit=true时保持PENDING状态")
+    void createRefund_needAuditTrue_staysPending() {
+        PaymentOrder paymentOrder = createPaidPaymentOrder();
+        when(paymentOrderRepository.findByPaymentOrderNo("PAY001")).thenReturn(Optional.of(paymentOrder));
+        when(refundOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateRefundCommand command = new CreateRefundCommand(
+            "BIZ001", "PAY001", 10000L, "取消", null, "https://biz.example.com/refund-notify", true
+        );
+
+        RefundOrderResponse response = service.createRefund(command, "TestSystem");
+
+        assertThat(response.status()).isEqualTo(1); // PENDING
+        verify(paymentGatewayPort, never()).createRefund(any(), anyString());
     }
 
     @Test

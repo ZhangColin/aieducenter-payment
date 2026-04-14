@@ -28,6 +28,11 @@ public record CreateRefundCommand(
     String attach,
 
     @Size(max = 512, message = "退款通知地址长度不能超过512")
-    String notifyUrl
+    String notifyUrl,
+
+    Boolean needAudit
 ) {
+    public boolean isNeedAudit() {
+        return needAudit == null || needAudit;
+    }
 }
