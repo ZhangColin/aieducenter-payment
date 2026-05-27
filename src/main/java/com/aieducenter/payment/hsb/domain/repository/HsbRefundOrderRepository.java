@@ -10,5 +10,4 @@ import java.util.Optional;
 public interface HsbRefundOrderRepository extends BaseRepository<HsbRefundOrder, Long> {
     Optional<HsbRefundOrder> findByRefundOrderNo(String refundOrderNo);
     List<HsbRefundOrder> findByStatus(HsbRefundStatus status);
-    List<HsbRefundOrder> findByPyTrnNo(String pyTrnNo);
 }
