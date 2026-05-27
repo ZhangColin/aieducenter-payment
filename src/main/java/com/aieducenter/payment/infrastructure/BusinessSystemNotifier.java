@@ -2,6 +2,8 @@ package com.aieducenter.payment.infrastructure;
 
 import com.aieducenter.payment.application.dto.callback.RefundNotifyRequest;
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
+import com.aieducenter.payment.hsb.application.dto.response.HsbPaymentOrderResponse;
+import com.aieducenter.payment.hsb.application.dto.response.HsbRefundOrderResponse;
 import com.alibaba.fastjson2.JSON;
 import com.cartisan.core.stereotype.Adapter;
 import com.cartisan.core.stereotype.PortType;
@@ -56,6 +58,28 @@ public class BusinessSystemNotifier {
             return;
         }
         sendNotification(notifyUrl, JSON.toJSONString(request), request.refundOrderNo());
+    }
+
+    /**
+     * 通知业务系统（HSB 支付结果）
+     */
+    public void notify(String notifyUrl, HsbPaymentOrderResponse response) {
+        if (notifyUrl == null || notifyUrl.isBlank()) {
+            log.debug("notifyUrl is empty, skip HSB payment notification. orderId={}", response.paymentOrderNo());
+            return;
+        }
+        sendNotification(notifyUrl, JSON.toJSONString(response), response.paymentOrderNo());
+    }
+
+    /**
+     * 通知业务系统（HSB 退款结果）
+     */
+    public void notify(String notifyUrl, HsbRefundOrderResponse response) {
+        if (notifyUrl == null || notifyUrl.isBlank()) {
+            log.debug("notifyUrl is empty, skip HSB refund notification. refundOrderNo={}", response.refundOrderNo());
+            return;
+        }
+        sendNotification(notifyUrl, JSON.toJSONString(response), response.refundOrderNo());
     }
 
     private void sendNotification(String notifyUrl, String body, String orderId) {
