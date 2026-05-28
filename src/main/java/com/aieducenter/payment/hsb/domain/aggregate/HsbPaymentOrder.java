@@ -11,6 +11,7 @@ import com.cartisan.data.jpa.domain.AuditableSoftDeletable;
 import jakarta.persistence.*;
 import lombok.Getter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -90,8 +91,16 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
     private String attach;
 
     @Getter
+    @Column(name = "cshdk_url", length = 512)
+    private String cshdkUrl;
+
+    @Getter
     @Column(name = "pay_url", length = 512)
     private String payUrl;
+
+    @Getter
+    @Column(name = "page_return_url", length = 512)
+    private String pageReturnUrl;
 
     @Getter
     @Column(name = "pay_qr_code", length = 512)
@@ -121,6 +130,14 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
     @Column(name = "expired_at")
     private LocalDateTime expiredAt;
 
+    /**
+     * 确认收货日期（建行字段: Clrg_Dt，格式 yyyyMMdd）
+     * 非必输，为空时调建行接口默认当前时间+3年
+     */
+    @Getter
+    @Column(name = "confirm_receipt_date")
+    private LocalDate confirmReceiptDate;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_order_id")
     private List<HsbSubOrder> subOrders = new ArrayList<>();
@@ -137,6 +154,11 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
             this.status = HsbPaymentStatus.PENDING;
             this.currency = this.currency != null ? this.currency : "156";
             this.expiredAt = calculateExpiredAt();
+        }
+        for (HsbSubOrder subOrder : subOrders) {
+            if (subOrder.getPaymentOrderId() == null) {
+                subOrder.setPaymentOrderInfo(this.id, this.paymentOrderNo);
+            }
         }
     }
 
@@ -156,6 +178,8 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
             Long expiredSeconds,
             String notifyUrl,
             String attach,
+            LocalDate confirmReceiptDate,
+            String pageReturnUrl,
             List<HsbSubOrder> subOrders
     ) {
         Assertions.require(StrUtil.isNotBlank(businessMainOrderNo), HsbMessage.HSB_PAYMENT_ORDER_NOT_FOUND);
@@ -175,6 +199,8 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
         this.expiredSeconds = expiredSeconds != null ? expiredSeconds : 3600L;
         this.notifyUrl = notifyUrl;
         this.attach = attach;
+        this.confirmReceiptDate = confirmReceiptDate;
+        this.pageReturnUrl = pageReturnUrl;
         this.status = HsbPaymentStatus.PENDING;
         this.expiredAt = calculateExpiredAt();
 
@@ -189,7 +215,8 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
         this.subOrders.add(subOrder);
     }
 
-    public void setPaymentResult(String payUrl, String payQrCode, String primOrderNo) {
+    public void setPaymentResult(String cshdkUrl, String payUrl, String payQrCode, String primOrderNo) {
+        this.cshdkUrl = cshdkUrl;
         this.payUrl = payUrl;
         this.payQrCode = payQrCode;
         this.primOrderNo = primOrderNo;
@@ -223,6 +250,15 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
         }
     }
 
+    public void updateSubOrderIds(java.util.Map<String, String> subOrderIdMap) {
+        for (HsbSubOrder subOrder : this.subOrders) {
+            String subOrderId = subOrderIdMap.get(subOrder.getBusinessSubOrderNo());
+            if (subOrderId != null) {
+                subOrder.setSubOrderId(subOrderId);
+            }
+        }
+    }
+
     private String generatePaymentOrderNo() {
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMAT);
         String random = RandomUtil.randomString("0123456789", 6);
@@ -231,5 +267,15 @@ public class HsbPaymentOrder extends AuditableSoftDeletable implements Aggregate
 
     private LocalDateTime calculateExpiredAt() {
         return LocalDateTime.now().plusSeconds(this.expiredSeconds != null ? this.expiredSeconds : 3600L);
+    }
+
+    /**
+     * 获取确认收货日期，为空时默认当前时间+3年（建行字段: Clrg_Dt，格式 yyyyMMdd）
+     */
+    public String resolveClrgDt() {
+        if (confirmReceiptDate != null) {
+            return confirmReceiptDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        }
+        return LocalDate.now().plusYears(3).format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     }
 }

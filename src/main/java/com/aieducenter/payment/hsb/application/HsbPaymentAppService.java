@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
@@ -31,39 +32,45 @@ public class HsbPaymentAppService {
     private final HsbPaymentLogRepository paymentLogRepository;
     private final HsbPaymentGatewayPort gatewayPort;
     private final HsbConfig hsbConfig;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     public HsbPaymentOrderResponse createPayment(CreateHsbPaymentCommand command, String businessSystemName) {
-        List<HsbSubOrder> subOrders = command.subOrders().stream()
-            .map(sub -> new HsbSubOrder(
+        // 事务1：创建并保存订单（PENDING 状态）
+        HsbPaymentOrder order = transactionTemplate.execute(status -> {
+            List<HsbSubOrder> subOrders = command.subOrders().stream()
+                .map(sub -> new HsbSubOrder(
+                    command.businessMainOrderNo(),
+                    sub.businessSubOrderNo(),
+                    sub.mktMrchId(),
+                    sub.orderAmount(),
+                    sub.txnAmount()
+                ))
+                .toList();
+
+            HsbPaymentOrder paymentOrder = new HsbPaymentOrder(
                 command.businessMainOrderNo(),
-                sub.businessSubOrderNo(),
-                sub.mktMrchId(),
-                sub.orderAmount(),
-                sub.txnAmount()
-            ))
-            .toList();
+                businessSystemName,
+                command.businessName(),
+                hsbConfig.getMktId(),
+                command.paymentMethod(),
+                command.orderType(),
+                command.currency(),
+                command.totalAmount(),
+                command.txnTotalAmount(),
+                command.feeBearerId(),
+                command.expiredSeconds(),
+                command.notifyUrl(),
+                command.attach(),
+                command.confirmReceiptDate(),
+                null,
+                subOrders
+            );
 
-        HsbPaymentOrder order = new HsbPaymentOrder(
-            command.businessMainOrderNo(),
-            businessSystemName,
-            command.businessName(),
-            hsbConfig.getMktId(),
-            command.paymentMethod(),
-            command.orderType(),
-            command.currency(),
-            command.totalAmount(),
-            command.txnTotalAmount(),
-            command.feeBearerId(),
-            command.expiredSeconds(),
-            command.notifyUrl(),
-            command.attach(),
-            subOrders
-        );
+            return paymentOrderRepository.save(paymentOrder);
+        });
 
-        HsbPaymentOrder saved = paymentOrderRepository.save(order);
-
-        CreateHsbPaymentResponse gatewayResponse = gatewayPort.createPayment(order, subOrders);
+        // 调用建行网关（无事务，失败不影响订单记录）
+        CreateHsbPaymentResponse gatewayResponse = gatewayPort.createPayment(order, order.getSubOrders());
 
         saveLog(order.getPaymentOrderNo(), null, "PAYMENT_REQUEST", "gatherPlaceorder",
             gatewayResponse.requestParams(), gatewayResponse.responseParams(),
@@ -74,12 +81,25 @@ public class HsbPaymentAppService {
             throw new RuntimeException("建行网关调用失败: " + gatewayResponse.returnMsg());
         }
 
-        if (gatewayResponse.payUrl() != null || gatewayResponse.primOrderNo() != null) {
-            saved.setPaymentResult(gatewayResponse.payUrl(), gatewayResponse.payQrCode(), gatewayResponse.primOrderNo());
-            paymentOrderRepository.save(saved);
+        // 事务2：更新支付结果和子订单ID
+        if (gatewayResponse.payUrl() != null || gatewayResponse.primOrderNo() != null
+            || (gatewayResponse.subOrderIds() != null && !gatewayResponse.subOrderIds().isEmpty())) {
+            transactionTemplate.executeWithoutResult(status -> {
+                HsbPaymentOrder toUpdate = paymentOrderRepository.findByPaymentOrderNo(order.getPaymentOrderNo())
+                    .orElseThrow();
+                toUpdate.setPaymentResult(null, gatewayResponse.payUrl(), gatewayResponse.payQrCode(), gatewayResponse.primOrderNo());
+                if (gatewayResponse.subOrderIds() != null && !gatewayResponse.subOrderIds().isEmpty()) {
+                    toUpdate.updateSubOrderIds(gatewayResponse.subOrderIds());
+                }
+                paymentOrderRepository.save(toUpdate);
+                order.setPaymentResult(null, gatewayResponse.payUrl(), gatewayResponse.payQrCode(), gatewayResponse.primOrderNo());
+                if (gatewayResponse.subOrderIds() != null && !gatewayResponse.subOrderIds().isEmpty()) {
+                    order.updateSubOrderIds(gatewayResponse.subOrderIds());
+                }
+            });
         }
 
-        return HsbPaymentOrderMapper.convert(saved);
+        return HsbPaymentOrderMapper.convert(order);
     }
 
     @Transactional(readOnly = true)

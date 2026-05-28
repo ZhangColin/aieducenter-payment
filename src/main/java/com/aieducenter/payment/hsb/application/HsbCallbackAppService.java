@@ -80,7 +80,7 @@ public class HsbCallbackAppService {
             Long actualAmount = yuanToFen(param.getOrdrAmt());
             order.markAsPaid(param.getPyTrnNo(), actualAmount);
             if (param.getPrimOrdrNo() != null) {
-                order.setPaymentResult(order.getPayUrl(), order.getPayQrCode(), param.getPrimOrdrNo());
+                order.setPaymentResult(order.getCshdkUrl(), order.getPayUrl(), order.getPayQrCode(), param.getPrimOrdrNo());
             }
         } else if (param.isPaymentFailed()) {
             order.markAsFailed();
