@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Builder;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Builder
@@ -22,6 +23,8 @@ public record CreateHsbPaymentCommand(
     Long expiredSeconds,
     String notifyUrl,
     String attach,
+    String pageReturnUrl,
+    LocalDate confirmReceiptDate,
     @NotEmpty @Valid List<HsbSubOrderCommand> subOrders
 ) {
     @Builder

@@ -43,7 +43,7 @@ class HsbPaymentGatewayAdapterTest {
         );
 
         String mockResponse = """
-            {"Svc_Rsp_St":"00","Svc_Rsp_Cd":"SUCCESS","Cshdk_Url":"http://pay.url","Pay_Qr_Code":"QR123","Prim_Ordr_No":"PRIM001"}
+            {"Svc_Rsp_St":"00","Svc_Rsp_Cd":"SUCCESS","Cshdk_Url":"http://cashier.url","Pay_Url":"http://pay.url","Pay_Qr_Code":"QR123","Prim_Ordr_No":"PRIM001"}
             """;
 
         try (MockedStatic<HsbSignUtil> signUtilMock = mockStatic(HsbSignUtil.class)) {
@@ -58,6 +58,8 @@ class HsbPaymentGatewayAdapterTest {
             JSONObject requestJson = JSONObject.parseObject(bodyCaptor.getValue());
             assertThat(requestJson.getString("Clrg_Dt")).isEqualTo("20290527");
             assertThat(response.success()).isTrue();
+            assertThat(response.cshdkUrl()).isEqualTo("http://cashier.url");
+            assertThat(response.payUrl()).isEqualTo("http://pay.url");
         }
     }
 
@@ -70,7 +72,7 @@ class HsbPaymentGatewayAdapterTest {
         );
 
         String mockResponse = """
-            {"Svc_Rsp_St":"00","Svc_Rsp_Cd":"SUCCESS","Cshdk_Url":"http://pay.url","Pay_Qr_Code":"QR123","Prim_Ordr_No":"PRIM001"}
+            {"Svc_Rsp_St":"00","Svc_Rsp_Cd":"SUCCESS","Cshdk_Url":"http://cashier.url","Pay_Url":"http://pay.url","Pay_Qr_Code":"QR123","Prim_Ordr_No":"PRIM001"}
             """;
 
         try (MockedStatic<HsbSignUtil> signUtilMock = mockStatic(HsbSignUtil.class)) {
@@ -88,7 +90,63 @@ class HsbPaymentGatewayAdapterTest {
         }
     }
 
+    @Test
+    @DisplayName("createPayment 订单有 pageReturnUrl 时，请求应包含 Pgfc_Ret_Url_Adr")
+    void given_orderWithPageReturnUrl_when_createPayment_then_requestContainsPgfcRetUrlAdr() {
+        HsbPaymentOrder order = createTestOrder(null, "https://example.com/return");
+        List<HsbSubOrder> subOrders = List.of(
+            new HsbSubOrder("BIZ001", "SUB001", "MERCH001", 10000L, 10000L)
+        );
+
+        String mockResponse = """
+            {"Svc_Rsp_St":"00","Svc_Rsp_Cd":"SUCCESS","Cshdk_Url":"http://cashier.url","Pay_Url":"http://pay.url","Pay_Qr_Code":"QR123","Prim_Ordr_No":"PRIM001"}
+            """;
+
+        try (MockedStatic<HsbSignUtil> signUtilMock = mockStatic(HsbSignUtil.class)) {
+            signUtilMock.when(() -> HsbSignUtil.sign(anyString(), anyString())).thenReturn("mock-signature");
+            when(hsbHttpClient.postJson(anyString(), anyString())).thenReturn(mockResponse);
+
+            adapter.createPayment(order, subOrders);
+
+            ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+            verify(hsbHttpClient).postJson(anyString(), bodyCaptor.capture());
+
+            JSONObject requestJson = JSONObject.parseObject(bodyCaptor.getValue());
+            assertThat(requestJson.getString("Pgfc_Ret_Url_Adr")).isEqualTo("https://example.com/return");
+        }
+    }
+
+    @Test
+    @DisplayName("createPayment 订单没有 pageReturnUrl 时，请求不应包含 Pgfc_Ret_Url_Adr")
+    void given_orderWithoutPageReturnUrl_when_createPayment_then_requestOmitsPgfcRetUrlAdr() {
+        HsbPaymentOrder order = createTestOrder(null, null);
+        List<HsbSubOrder> subOrders = List.of(
+            new HsbSubOrder("BIZ001", "SUB001", "MERCH001", 10000L, 10000L)
+        );
+
+        String mockResponse = """
+            {"Svc_Rsp_St":"00","Svc_Rsp_Cd":"SUCCESS","Cshdk_Url":"http://cashier.url","Pay_Url":"http://pay.url","Pay_Qr_Code":"QR123","Prim_Ordr_No":"PRIM001"}
+            """;
+
+        try (MockedStatic<HsbSignUtil> signUtilMock = mockStatic(HsbSignUtil.class)) {
+            signUtilMock.when(() -> HsbSignUtil.sign(anyString(), anyString())).thenReturn("mock-signature");
+            when(hsbHttpClient.postJson(anyString(), anyString())).thenReturn(mockResponse);
+
+            adapter.createPayment(order, subOrders);
+
+            ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+            verify(hsbHttpClient).postJson(anyString(), bodyCaptor.capture());
+
+            JSONObject requestJson = JSONObject.parseObject(bodyCaptor.getValue());
+            assertThat(requestJson.getString("Pgfc_Ret_Url_Adr")).isNull();
+        }
+    }
+
     private HsbPaymentOrder createTestOrder(LocalDate confirmReceiptDate) {
+        return createTestOrder(confirmReceiptDate, null);
+    }
+
+    private HsbPaymentOrder createTestOrder(LocalDate confirmReceiptDate, String pageReturnUrl) {
         return new HsbPaymentOrder(
             "BIZ001",
             "TestSystem",
@@ -104,7 +162,7 @@ class HsbPaymentGatewayAdapterTest {
             "https://example.com/notify",
             null,
             confirmReceiptDate,
-            null,
+            pageReturnUrl,
             List.of(new HsbSubOrder("BIZ001", "SUB001", "MERCH001", 10000L, 10000L))
         );
     }

@@ -3,6 +3,7 @@ package com.aieducenter.payment.hsb.application;
 import com.aieducenter.payment.hsb.application.dto.command.CreateHsbPaymentCommand;
 import com.aieducenter.payment.hsb.application.dto.response.HsbPaymentOrderResponse;
 import com.aieducenter.payment.hsb.domain.aggregate.HsbPaymentOrder;
+import com.aieducenter.payment.hsb.domain.aggregate.HsbSubOrder;
 import com.aieducenter.payment.hsb.domain.port.HsbPaymentGatewayPort;
 import com.aieducenter.payment.hsb.domain.port.response.CreateHsbPaymentResponse;
 import com.aieducenter.payment.hsb.domain.repository.HsbPaymentLogRepository;
@@ -80,12 +81,12 @@ class HsbPaymentAppServiceTest {
         when(paymentOrderRepository.findByPaymentOrderNo(any())).thenAnswer(inv -> {
             HsbPaymentOrder order = new HsbPaymentOrder(
                 "BIZ001", "TestSystem", null, "41060860811052", "03", "04", "156",
-                10000L, 10000L, null, 3600L, null, null, null, null, List.of());
+                10000L, 10000L, null, 3600L, null, null, null, null, List.<HsbSubOrder>of());
             return java.util.Optional.of(order);
         });
 
         CreateHsbPaymentResponse gatewayResponse = new CreateHsbPaymentResponse(
-            true, "00", "SUCCESS", "http://pay.url", "QR123", "PRIM001",
+            true, "00", "SUCCESS", "http://cashier.url", "http://pay.url", "QR123", "PRIM001",
             100L, "{}", "{}", null);
         when(gatewayPort.createPayment(any(), any())).thenReturn(gatewayResponse);
 
@@ -103,7 +104,7 @@ class HsbPaymentAppServiceTest {
         CreateHsbPaymentCommand command = createCommand();
         when(paymentOrderRepository.save(any(HsbPaymentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(gatewayPort.createPayment(any(), any())).thenReturn(
-            new CreateHsbPaymentResponse(false, "01", "FAIL", null, null, null, 50L, "{}", "{}", null));
+            new CreateHsbPaymentResponse(false, "01", "FAIL", null, null, null, null, 50L, "{}", "{}", null));
 
         assertThatThrownBy(() -> service.createPayment(command, "TestSystem"))
             .isInstanceOf(RuntimeException.class)
@@ -118,11 +119,11 @@ class HsbPaymentAppServiceTest {
         when(paymentOrderRepository.findByPaymentOrderNo(any())).thenAnswer(inv -> {
             HsbPaymentOrder order = new HsbPaymentOrder(
                 "BIZ001", "TestSystem", null, "41060860811052", "03", "04", "156",
-                10000L, 10000L, null, 3600L, null, null, null, null, List.of());
+                10000L, 10000L, null, 3600L, null, null, null, null, List.<HsbSubOrder>of());
             return java.util.Optional.of(order);
         });
         when(gatewayPort.createPayment(any(), any())).thenReturn(
-            new CreateHsbPaymentResponse(true, "00", "SUCCESS", "http://pay.url", null, "PRIM001", 100L, "{}", "{}", null));
+            new CreateHsbPaymentResponse(true, "00", "SUCCESS", "http://cashier.url", "http://pay.url", null, "PRIM001", 100L, "{}", "{}", null));
 
         service.createPayment(command, "TestSystem");
 
@@ -139,13 +140,13 @@ class HsbPaymentAppServiceTest {
         when(paymentOrderRepository.findByPaymentOrderNo(any())).thenAnswer(inv -> {
             HsbPaymentOrder order = new HsbPaymentOrder(
                 "BIZ001", "TestSystem", null, "41060860811052", "03", "04", "156",
-                10000L, 10000L, null, 3600L, null, null, null, null, List.of());
+                10000L, 10000L, null, 3600L, null, null, null, null, List.<HsbSubOrder>of());
             return java.util.Optional.of(order);
         });
 
         Map<String, String> subOrderIds = Map.of("SUB001", "105000007630317032310103433719001");
         CreateHsbPaymentResponse gatewayResponse = new CreateHsbPaymentResponse(
-            true, "00", "SUCCESS", "http://pay.url", "QR123", "PRIM001",
+            true, "00", "SUCCESS", "http://cashier.url", "http://pay.url", "QR123", "PRIM001",
             100L, "{}", "{}", subOrderIds);
         when(gatewayPort.createPayment(any(), any())).thenReturn(gatewayResponse);
 

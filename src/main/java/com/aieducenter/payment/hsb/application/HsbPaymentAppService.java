@@ -62,7 +62,7 @@ public class HsbPaymentAppService {
                 command.notifyUrl(),
                 command.attach(),
                 command.confirmReceiptDate(),
-                null,
+                command.pageReturnUrl(),
                 subOrders
             );
 
@@ -82,17 +82,17 @@ public class HsbPaymentAppService {
         }
 
         // 事务2：更新支付结果和子订单ID
-        if (gatewayResponse.payUrl() != null || gatewayResponse.primOrderNo() != null
+        if (gatewayResponse.cshdkUrl() != null || gatewayResponse.payUrl() != null || gatewayResponse.primOrderNo() != null
             || (gatewayResponse.subOrderIds() != null && !gatewayResponse.subOrderIds().isEmpty())) {
             transactionTemplate.executeWithoutResult(status -> {
                 HsbPaymentOrder toUpdate = paymentOrderRepository.findByPaymentOrderNo(order.getPaymentOrderNo())
                     .orElseThrow();
-                toUpdate.setPaymentResult(null, gatewayResponse.payUrl(), gatewayResponse.payQrCode(), gatewayResponse.primOrderNo());
+                toUpdate.setPaymentResult(gatewayResponse.cshdkUrl(), gatewayResponse.payUrl(), gatewayResponse.payQrCode(), gatewayResponse.primOrderNo());
                 if (gatewayResponse.subOrderIds() != null && !gatewayResponse.subOrderIds().isEmpty()) {
                     toUpdate.updateSubOrderIds(gatewayResponse.subOrderIds());
                 }
                 paymentOrderRepository.save(toUpdate);
-                order.setPaymentResult(null, gatewayResponse.payUrl(), gatewayResponse.payQrCode(), gatewayResponse.primOrderNo());
+                order.setPaymentResult(gatewayResponse.cshdkUrl(), gatewayResponse.payUrl(), gatewayResponse.payQrCode(), gatewayResponse.primOrderNo());
                 if (gatewayResponse.subOrderIds() != null && !gatewayResponse.subOrderIds().isEmpty()) {
                     order.updateSubOrderIds(gatewayResponse.subOrderIds());
                 }

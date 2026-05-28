@@ -48,10 +48,14 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         json.put("Ccy", order.getCurrency());
         json.put("Ordr_Tamt", fenToYuan(order.getTotalAmount()));
         json.put("Txn_Tamt", fenToYuan(order.getTxnTotalAmount()));
-        if (order.getFeeBearerId() != null) {
+        if (cn.hutool.core.util.StrUtil.isNotBlank(order.getFeeBearerId())) {
             json.put("Hdcg_Brs_Id", order.getFeeBearerId());
         }
         json.put("Vno", hsbConfig.getVersion().getPlaceOrder());
+        json.put("Clrg_Dt", order.resolveClrgDt());
+        if (cn.hutool.core.util.StrUtil.isNotBlank(order.getPageReturnUrl())) {
+            json.put("Pgfc_Ret_Url_Adr", order.getPageReturnUrl());
+        }
 
         JSONArray orderList = new JSONArray();
         for (HsbSubOrder sub : subOrders) {
@@ -77,7 +81,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
             long executionTime = System.currentTimeMillis() - startTime;
             log.error("HSB createPayment failed", e);
             return new CreateHsbPaymentResponse(false, "SYSTEM_ERROR", e.getMessage(),
-                null, null, null, executionTime, requestParams, null);
+                null, null, null, null, executionTime, requestParams, null, null);
         }
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -86,12 +90,29 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         String returnMsg = response.getString("Svc_Rsp_Cd");
 
         boolean success = "00".equals(returnCode);
-        String payUrl = success ? response.getString("Cshdk_Url") : null;
+        String cshdkUrl = success ? response.getString("Cshdk_Url") : null;
+        String payUrl = success ? response.getString("Pay_Url") : null;
         String payQrCode = success ? response.getString("Pay_Qr_Code") : null;
         String primOrderNo = success ? response.getString("Prim_Ordr_No") : null;
 
+        java.util.Map<String, String> subOrderIdMap = null;
+        if (success) {
+            JSONArray responseOrderList = response.getJSONArray("Orderlist");
+            if (responseOrderList != null) {
+                subOrderIdMap = new java.util.LinkedHashMap<>();
+                for (int i = 0; i < responseOrderList.size(); i++) {
+                    JSONObject subJson = responseOrderList.getJSONObject(i);
+                    String cmdtyOrdrNo = subJson.getString("Cmdty_Ordr_No");
+                    String subOrdrId = subJson.getString("Sub_Ordr_Id");
+                    if (cmdtyOrdrNo != null && subOrdrId != null) {
+                        subOrderIdMap.put(cmdtyOrdrNo, subOrdrId);
+                    }
+                }
+            }
+        }
+
         return new CreateHsbPaymentResponse(success, returnCode, returnMsg,
-            payUrl, payQrCode, primOrderNo, executionTime, requestParams, responseBody);
+            cshdkUrl, payUrl, payQrCode, primOrderNo, executionTime, requestParams, responseBody, subOrderIdMap);
     }
 
     @Override

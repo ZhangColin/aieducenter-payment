@@ -2,6 +2,7 @@ package com.aieducenter.payment.hsb.application.dto.response;
 
 import lombok.Builder;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,6 +20,7 @@ public record HsbPaymentOrderResponse(
     Long totalAmount,
     Long txnTotalAmount,
     String feeBearerId,
+    String cshdkUrl,
     String payUrl,
     String payQrCode,
     String primOrderNo,
@@ -29,6 +31,8 @@ public record HsbPaymentOrderResponse(
     LocalDateTime expiredAt,
     String notifyUrl,
     String attach,
+    String pageReturnUrl,
+    LocalDate confirmReceiptDate,
     List<HsbSubOrderResponse> subOrders
 ) {
     @Builder
