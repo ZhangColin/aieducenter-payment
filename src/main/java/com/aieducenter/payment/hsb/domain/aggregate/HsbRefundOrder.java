@@ -104,6 +104,11 @@ public class HsbRefundOrder extends AuditableSoftDeletable implements AggregateR
             this.refundOrderNo = generateRefundOrderNo();
             this.status = HsbRefundStatus.PENDING;
         }
+        for (HsbRefundSubOrder subOrder : subOrders) {
+            if (subOrder.getRefundOrderId() == null) {
+                subOrder.setRefundOrderInfo(this.id, this.refundOrderNo);
+            }
+        }
     }
 
     protected HsbRefundOrder() {}

@@ -25,8 +25,7 @@ public class HsbHttpClient {
     }
 
     public String postJson(String url, String json) {
-        log.info("HSB HTTP POST: url={}", url);
-        log.debug("HSB HTTP POST body: {}", json);
+        log.info("HSB HTTP POST: url={}, headers={{Content-Type={}}}, body={}", url, MediaType.APPLICATION_JSON_VALUE, json);
 
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
@@ -37,8 +36,7 @@ public class HsbHttpClient {
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            log.info("HSB HTTP response: status={}", response.statusCode());
-            log.debug("HSB HTTP response body: {}", response.body());
+            log.info("HSB HTTP response: status={}, body={}", response.statusCode(), response.body());
 
             if (response.statusCode() != 200) {
                 throw new RuntimeException("建行接口返回 HTTP " + response.statusCode() + ": " + response.body());

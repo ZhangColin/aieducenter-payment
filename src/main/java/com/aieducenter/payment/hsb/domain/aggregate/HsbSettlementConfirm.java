@@ -6,6 +6,8 @@ import com.cartisan.core.stereotype.Aggregate;
 import com.cartisan.data.jpa.domain.AuditableSoftDeletable;
 import jakarta.persistence.*;
 import lombok.Getter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,11 +39,13 @@ public class HsbSettlementConfirm extends AuditableSoftDeletable implements Aggr
     private HsbSettlementStatus status;
 
     @Getter
-    @Column(name = "business_sub_order_nos", columnDefinition = "JSON")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "business_sub_order_nos", columnDefinition = "json")
     private String businessSubOrderNos;
 
     @Getter
-    @Column(name = "sub_order_ids", columnDefinition = "JSON")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "sub_order_ids", columnDefinition = "json")
     private String subOrderIds;
 
     @Getter

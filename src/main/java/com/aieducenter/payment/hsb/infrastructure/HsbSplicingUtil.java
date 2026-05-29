@@ -3,6 +3,8 @@ package com.aieducenter.payment.hsb.infrastructure;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -32,11 +34,11 @@ public class HsbSplicingUtil {
             }
 
             if (value instanceof JSONArray jsonArray) {
-                StringBuilder sb = new StringBuilder();
+                List<String> subResults = new ArrayList<>();
                 for (int i = 0; i < jsonArray.size(); i++) {
-                    sb.append(splicingSign(jsonArray.getJSONObject(i).toJSONString(), isNotification));
+                    subResults.add(splicingSign(jsonArray.getJSONObject(i).toJSONString(), isNotification));
                 }
-                sortedMap.put(key, sb.toString());
+                sortedMap.put(key, subResults);
             } else if (value instanceof JSONObject jsonObj) {
                 String nestedSign = splicingSign(jsonObj.toJSONString(), isNotification);
                 sortedMap.put(key, nestedSign);
@@ -50,7 +52,14 @@ public class HsbSplicingUtil {
 
         StringBuilder result = new StringBuilder();
         for (SortedMap.Entry<String, Object> entry : sortedMap.entrySet()) {
-            result.append(entry.getKey()).append("=").append(entry.getValue()).append("&");
+            Object value = entry.getValue();
+            if (value instanceof List<?> list) {
+                for (Object v : list) {
+                    result.append(v);
+                }
+            } else {
+                result.append(entry.getKey()).append("=").append(entry.getValue()).append("&");
+            }
         }
         return result.toString();
     }

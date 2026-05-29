@@ -1,15 +1,16 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/aieducenter
-    username: aiedu
-    password: dev123
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   data:
     redis:
-      host: localhost
-      port: 6379
-      password: truth
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
 
-spring.jpa.show-sql: true
+spring.jpa.show-sql: false
+logging.level.root: INFO
 
 # 工行支付网关配置
 gateway:
@@ -30,6 +31,7 @@ gateway:
 payment:
   default-expired-seconds: 3600
 
+
 # 建行惠市宝支付配置
 hsb:
   base-url: ${HSB_BASE_URL:http://marketpaypl4.dev.jh:8035/online/direct/}
@@ -49,5 +51,3 @@ hsb:
 scheduler:
   payment-expiration: "0 */5 * * * *"
   refund-query: "0 */5 * * * *"
-  hsb-payment-query: "0 */5 * * * *"
-  hsb-refund-query: "0 */5 * * * *"
