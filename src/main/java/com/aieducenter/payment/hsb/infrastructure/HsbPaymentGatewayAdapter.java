@@ -48,11 +48,12 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         json.put("Ccy", order.getCurrency());
         json.put("Ordr_Tamt", fenToYuan(order.getTotalAmount()));
         json.put("Txn_Tamt", fenToYuan(order.getTxnTotalAmount()));
-        if (cn.hutool.core.util.StrUtil.isNotBlank(hsbConfig.getPlatformMerchantId())) {
-            json.put("Hdcg_Brs_Id", hsbConfig.getPlatformMerchantId());
-        } else if (cn.hutool.core.util.StrUtil.isNotBlank(order.getFeeBearerId())) {
-            json.put("Hdcg_Brs_Id", order.getFeeBearerId());
-        }
+        // TODO 建行配置暂不支持 Hdcg_Brs_Id，待确认后启用
+        // if (cn.hutool.core.util.StrUtil.isNotBlank(hsbConfig.getPlatformMerchantId())) {
+        //     json.put("Hdcg_Brs_Id", hsbConfig.getPlatformMerchantId());
+        // } else if (cn.hutool.core.util.StrUtil.isNotBlank(order.getFeeBearerId())) {
+        //     json.put("Hdcg_Brs_Id", order.getFeeBearerId());
+        // }
         json.put("Vno", hsbConfig.getVersion().getPlaceOrder());
         json.put("Clrg_Dt", order.resolveClrgDt());
         if (cn.hutool.core.util.StrUtil.isNotBlank(order.getPageReturnUrl())) {
