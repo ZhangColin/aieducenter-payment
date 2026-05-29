@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class HsbConfig {
     private String baseUrl = "http://marketpaypl4.dev.jh:8035/online/direct/";
     private String mktId;
+    private String platformMerchantId;
     private String privateKey;
     private String platformPublicKey;
     private String initiatorSystemId = "00000";

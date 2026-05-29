@@ -3,6 +3,7 @@ package com.aieducenter.payment.hsb.endpoints.api.v1;
 import com.aieducenter.payment.hsb.application.HsbCallbackAppService;
 import com.aieducenter.payment.hsb.application.dto.callback.HsbPaymentCallbackParam;
 import com.aieducenter.payment.hsb.application.dto.callback.HsbRefundCallbackParam;
+import com.alibaba.fastjson2.JSON;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,10 +26,11 @@ public class HsbCallbackController {
     @PostMapping(value = "/payment", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "接收建行惠市宝支付结果回调")
     public ResponseEntity<String> handlePaymentCallback(
-            @RequestBody HsbPaymentCallbackParam param
+            @RequestBody String rawBody
     ) {
+        HsbPaymentCallbackParam param = JSON.parseObject(rawBody, HsbPaymentCallbackParam.class);
         log.info("Received HSB payment callback: mainOrderNo={}", param.getMainOrdrNo());
-        String response = callbackAppService.handlePaymentCallback(param);
+        String response = callbackAppService.handlePaymentCallback(param, rawBody);
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_JSON)
             .body(response);
@@ -37,10 +39,11 @@ public class HsbCallbackController {
     @PostMapping(value = "/refund", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "接收建行惠市宝退款结果回调")
     public ResponseEntity<String> handleRefundCallback(
-            @RequestBody HsbRefundCallbackParam param
+            @RequestBody String rawBody
     ) {
+        HsbRefundCallbackParam param = JSON.parseObject(rawBody, HsbRefundCallbackParam.class);
         log.info("Received HSB refund callback: custRfndTrcno={}", param.getCustRfndTrcno());
-        String response = callbackAppService.handleRefundCallback(param);
+        String response = callbackAppService.handleRefundCallback(param, rawBody);
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_JSON)
             .body(response);

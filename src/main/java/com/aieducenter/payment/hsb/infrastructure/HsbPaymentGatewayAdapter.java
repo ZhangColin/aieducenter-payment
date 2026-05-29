@@ -48,7 +48,9 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         json.put("Ccy", order.getCurrency());
         json.put("Ordr_Tamt", fenToYuan(order.getTotalAmount()));
         json.put("Txn_Tamt", fenToYuan(order.getTxnTotalAmount()));
-        if (cn.hutool.core.util.StrUtil.isNotBlank(order.getFeeBearerId())) {
+        if (cn.hutool.core.util.StrUtil.isNotBlank(hsbConfig.getPlatformMerchantId())) {
+            json.put("Hdcg_Brs_Id", hsbConfig.getPlatformMerchantId());
+        } else if (cn.hutool.core.util.StrUtil.isNotBlank(order.getFeeBearerId())) {
             json.put("Hdcg_Brs_Id", order.getFeeBearerId());
         }
         json.put("Vno", hsbConfig.getVersion().getPlaceOrder());
@@ -176,7 +178,8 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         json.put("Ittparty_Jrnl_No", order.getRefundOrderNo());
         json.put("Mkt_Id", hsbConfig.getMktId());
         json.put("Py_Trn_No", pyTrnNo);
-        json.put("Rfnd_Type", "ASYNC".equals(order.getRefundType()) ? "01" : "00");
+        json.put("Rfnd_Type", "01".equals(order.getRefundType()) || "ASYNC".equals(order.getRefundType()) ? "01" : "00");
+        json.put("Cust_Rfnd_Trcno", order.getRefundOrderNo());
         json.put("Rfnd_Amt", fenToYuan(order.getRefundAmount()));
         json.put("Vno", hsbConfig.getVersion().getRefundOrder());
 

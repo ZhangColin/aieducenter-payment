@@ -16,7 +16,6 @@ import com.aieducenter.payment.hsb.infrastructure.HsbConfig;
 import com.aieducenter.payment.hsb.infrastructure.HsbSignUtil;
 import com.aieducenter.payment.hsb.infrastructure.HsbSplicingUtil;
 import com.aieducenter.payment.infrastructure.BusinessSystemNotifier;
-import com.alibaba.fastjson2.JSON;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,12 +39,15 @@ public class HsbCallbackAppService {
     private final BusinessSystemNotifier businessSystemNotifier;
 
     @Transactional
-    public String handlePaymentCallback(HsbPaymentCallbackParam param) {
+    public String handlePaymentCallback(HsbPaymentCallbackParam param, String rawBody) {
         log.info("Received HSB payment callback: mainOrderNo={}, ordrStcd={}",
             param.getMainOrdrNo(), param.getOrdrStcd());
+        log.info("HSB payment callback raw body: {}", rawBody);
 
-        String rawJson = JSON.toJSONString(param);
-        String signStr = HsbSplicingUtil.createSign(rawJson, true);
+        String signStr = HsbSplicingUtil.createSign(rawBody, true);
+        log.info("HSB payment callback sign string: {}", signStr);
+        log.info("HSB payment callback sign value (Sign_Inf): {}", param.getSignInf());
+
         boolean verified = HsbSignUtil.verifySign(hsbConfig.getPlatformPublicKey(), signStr, param.getSignInf());
 
         if (!verified) {
@@ -64,7 +66,7 @@ public class HsbCallbackAppService {
         try {
             paymentLogRepository.save(new HsbPaymentLog(
                 order.getPaymentOrderNo(), null, "PAYMENT_CALLBACK", "gatherPlaceorder",
-                null, null, rawJson, 200, param.getOrdrStcd(), null,
+                null, null, rawBody, 200, param.getOrdrStcd(), null,
                 null, true, null
             ));
         } catch (Exception e) {
@@ -102,12 +104,15 @@ public class HsbCallbackAppService {
     }
 
     @Transactional
-    public String handleRefundCallback(HsbRefundCallbackParam param) {
+    public String handleRefundCallback(HsbRefundCallbackParam param, String rawBody) {
         log.info("Received HSB refund callback: custRfndTrcno={}, refundRspSt={}",
             param.getCustRfndTrcno(), param.getRefundRspSt());
+        log.info("HSB refund callback raw body: {}", rawBody);
 
-        String rawJson = JSON.toJSONString(param);
-        String signStr = HsbSplicingUtil.createSign(rawJson, true);
+        String signStr = HsbSplicingUtil.createSign(rawBody, true);
+        log.info("HSB refund callback sign string: {}", signStr);
+        log.info("HSB refund callback sign value (Sign_Inf): {}", param.getSignInf());
+
         boolean verified = HsbSignUtil.verifySign(hsbConfig.getPlatformPublicKey(), signStr, param.getSignInf());
 
         if (!verified) {
@@ -127,7 +132,7 @@ public class HsbCallbackAppService {
             paymentLogRepository.save(new HsbPaymentLog(
                 refundOrder.getPaymentOrderNo(), refundOrder.getRefundOrderNo(),
                 "REFUND_CALLBACK", "refundOrder",
-                null, null, rawJson, 200, param.getRefundRspSt(), param.getRefundRspInf(),
+                null, null, rawBody, 200, param.getRefundRspSt(), param.getRefundRspInf(),
                 null, true, null
             ));
         } catch (Exception e) {

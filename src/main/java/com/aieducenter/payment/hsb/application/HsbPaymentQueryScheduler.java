@@ -27,6 +27,12 @@ public class HsbPaymentQueryScheduler {
         for (var order : pendingOrders) {
             try {
                 paymentAppService.queryPaymentStatus(order.getPaymentOrderNo());
+                // 查询后如果仍为 PENDING，说明银行也没有支付结果，直接标记为超时
+                if (order.getStatus() == HsbPaymentStatus.PENDING) {
+                    log.info("HSB payment order {} expired, marking as expired", order.getPaymentOrderNo());
+                    order.markAsExpired();
+                    paymentOrderRepository.save(order);
+                }
             } catch (Exception e) {
                 log.error("HSB payment query failed for order {}: {}",
                     order.getPaymentOrderNo(), e.getMessage());

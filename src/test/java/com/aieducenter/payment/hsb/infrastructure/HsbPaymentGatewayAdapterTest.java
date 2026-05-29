@@ -1,6 +1,8 @@
 package com.aieducenter.payment.hsb.infrastructure;
 
 import com.aieducenter.payment.hsb.domain.aggregate.HsbPaymentOrder;
+import com.aieducenter.payment.hsb.domain.aggregate.HsbRefundOrder;
+import com.aieducenter.payment.hsb.domain.aggregate.HsbRefundSubOrder;
 import com.aieducenter.payment.hsb.domain.aggregate.HsbSubOrder;
 import com.aieducenter.payment.hsb.domain.port.response.CreateHsbPaymentResponse;
 import com.alibaba.fastjson2.JSONObject;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
+import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -165,5 +168,43 @@ class HsbPaymentGatewayAdapterTest {
             pageReturnUrl,
             List.of(new HsbSubOrder("BIZ001", "SUB001", "MERCH001", 10000L, 10000L))
         );
+    }
+
+    @Test
+    @DisplayName("createRefund 请求中应包含 Cust_Rfnd_Trcno，值为退款订单号")
+    void given_refundOrder_when_createRefund_then_requestContainsCustRfndTrcno() {
+        HsbRefundOrder refundOrder = new HsbRefundOrder(
+            1L, "PAY001", "BIZ001", "TestSystem", null, "ASYNC",
+            10000L, "test refund", "https://example.com/notify", null, null
+        );
+        setRefundOrderNo(refundOrder, "HSBRF20260529123456789012");
+
+        String mockResponse = """
+            {"Svc_Rsp_St":"00","Svc_Rsp_Cd":"SUCCESS","Refund_Rsp_St":"01","Super_Refund_No":"SR001"}
+            """;
+
+        try (MockedStatic<HsbSignUtil> signUtilMock = mockStatic(HsbSignUtil.class)) {
+            signUtilMock.when(() -> HsbSignUtil.sign(anyString(), anyString())).thenReturn("mock-signature");
+            when(hsbHttpClient.postJson(anyString(), anyString())).thenReturn(mockResponse);
+
+            adapter.createRefund(refundOrder, "PY_TRN_001", null);
+
+            ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+            verify(hsbHttpClient).postJson(anyString(), bodyCaptor.capture());
+
+            JSONObject requestJson = JSONObject.parseObject(bodyCaptor.getValue());
+            assertThat(requestJson.getString("Cust_Rfnd_Trcno"))
+                .isEqualTo("HSBRF20260529123456789012");
+        }
+    }
+
+    private void setRefundOrderNo(HsbRefundOrder order, String refundOrderNo) {
+        try {
+            Field field = HsbRefundOrder.class.getDeclaredField("refundOrderNo");
+            field.setAccessible(true);
+            field.set(order, refundOrderNo);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
