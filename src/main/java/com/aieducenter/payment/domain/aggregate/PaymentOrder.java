@@ -1,6 +1,8 @@
 package com.aieducenter.payment.domain.aggregate;
 
 import cn.hutool.core.util.StrUtil;
+import com.aieducenter.payment.domain.enums.AccessType;
+import com.aieducenter.payment.domain.enums.PayMode;
 import com.aieducenter.payment.domain.enums.PaymentChannel;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.error.PaymentMessage;
@@ -110,6 +112,32 @@ public class PaymentOrder extends AuditableSoftDeletable implements AggregateRoo
     @Column(name = "actual_amount")
     private Long actualAmount;
 
+    // --- 预支付字段 ---
+
+    @Getter
+    @Column(name = "pay_mode")
+    private PayMode payMode;
+
+    @Getter
+    @Column(name = "access_type")
+    private AccessType accessType;
+
+    @Getter
+    @Column(name = "shop_appid", length = 32)
+    private String shopAppid;
+
+    @Getter
+    @Column(name = "open_id", length = 128)
+    private String openId;
+
+    @Getter
+    @Column(name = "prepay_data_package", columnDefinition = "TEXT")
+    private String prepayDataPackage;
+
+    @Getter
+    @Column(name = "trade_type", length = 16)
+    private String tradeType;
+
     @PrePersist
     void prePersist() {
         if (id == null) {
@@ -168,6 +196,30 @@ public class PaymentOrder extends AuditableSoftDeletable implements AggregateRoo
      */
     public void setQrCodeUrl(String qrCodeUrl) {
         this.qrCodeUrl = qrCodeUrl;
+    }
+
+    public void setPayMode(PayMode payMode) {
+        this.payMode = payMode;
+    }
+
+    public void setAccessType(AccessType accessType) {
+        this.accessType = accessType;
+    }
+
+    public void setShopAppid(String shopAppid) {
+        this.shopAppid = shopAppid;
+    }
+
+    public void setOpenId(String openId) {
+        this.openId = openId;
+    }
+
+    public void setPrepayDataPackage(String prepayDataPackage) {
+        this.prepayDataPackage = prepayDataPackage;
+    }
+
+    public void setTradeType(String tradeType) {
+        this.tradeType = tradeType;
     }
 
     /**
