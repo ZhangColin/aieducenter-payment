@@ -3,6 +3,7 @@ package com.aieducenter.payment.domain.port;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
 import com.aieducenter.payment.domain.port.response.CreatePaymentResponse;
+import com.aieducenter.payment.domain.port.response.CreatePrepayResponse;
 import com.aieducenter.payment.domain.port.response.CreateRefundResponse;
 import com.aieducenter.payment.domain.port.response.QueryPaymentResponse;
 import com.aieducenter.payment.domain.port.response.QueryRefundResponse;
@@ -27,6 +28,14 @@ public interface PaymentGatewayPort {
      * @return 创建支付响应
      */
     CreatePaymentResponse createPayment(PaymentOrder paymentOrder);
+
+    /**
+     * 创建预支付
+     *
+     * @param paymentOrder 支付订单聚合根（需包含 payMode, accessType, openId 等）
+     * @return 创建预支付响应
+     */
+    CreatePrepayResponse createPrepay(PaymentOrder paymentOrder);
 
     /**
      * 查询支付
