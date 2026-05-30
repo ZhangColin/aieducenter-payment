@@ -22,6 +22,11 @@ import com.icbc.api.response.CardbusinessAggregatepayB2cOnlineMerrefundResponseV
 import com.icbc.api.request.CardbusinessAggregatepayB2cOnlineRefundqryRequestV1;
 import com.icbc.api.request.CardbusinessAggregatepayB2cOnlineRefundqryRequestV1.CardbusinessAggregatepayB2cOnlineRefundqryRequestV1Biz;
 import com.icbc.api.response.CardbusinessAggregatepayB2cOnlineRefundqryResponseV1;
+import com.icbc.api.request.CardbusinessAggregatepayB2cOnlineConsumepurchaseRequestV1;
+import com.icbc.api.request.CardbusinessAggregatepayB2cOnlineConsumepurchaseRequestV1.CardbusinessAggregatepayB2cOnlineConsumepurchaseRequestV1Biz;
+import com.icbc.api.response.CardbusinessAggregatepayB2cOnlineConsumepurchaseResponseV1;
+import com.aieducenter.payment.domain.enums.PayMode;
+import com.aieducenter.payment.domain.port.response.CreatePrepayResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,6 +107,108 @@ public class IcbcPaymentGatewayAdapter implements PaymentGatewayPort {
             response.getReturnMsg(),
             success ? response.getCodeUrl() : null,
             success ? paymentOrder.getPaymentOrderNo() : null, // 使用支付订单号作为临时银行订单号
+            executionTime,
+            requestParams,
+            responseBody
+        );
+    }
+
+    @Override
+    public CreatePrepayResponse createPrepay(PaymentOrder paymentOrder) {
+        DefaultIcbcClient client = clientFactory.createClient();
+
+        CardbusinessAggregatepayB2cOnlineConsumepurchaseRequestV1 request =
+            new CardbusinessAggregatepayB2cOnlineConsumepurchaseRequestV1();
+        request.setServiceUrl(icbcConfig.getPrepayUrl());
+
+        CardbusinessAggregatepayB2cOnlineConsumepurchaseRequestV1Biz bizContent =
+            new CardbusinessAggregatepayB2cOnlineConsumepurchaseRequestV1Biz();
+
+        // 设置业务参数
+        bizContent.setMer_id(icbcConfig.getMerId());
+        bizContent.setOut_trade_no(paymentOrder.getPaymentOrderNo());
+        bizContent.setPay_mode(String.valueOf(paymentOrder.getPayMode().getCode()));
+        bizContent.setAccess_type(String.valueOf(paymentOrder.getAccessType().getCode()));
+        bizContent.setMer_prtcl_no(icbcConfig.getMerPrtclNo());
+        bizContent.setOrig_date_time(java.time.LocalDateTime.now().format(
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")));
+        bizContent.setDecive_info(cn.hutool.core.util.IdUtil.fastSimpleUUID().substring(0, 32));
+        bizContent.setBody(paymentOrder.getSubject());
+        bizContent.setFee_type("001"); // 人民币
+        bizContent.setSpbill_create_ip(paymentOrder.getClientIp() != null ? paymentOrder.getClientIp() : "127.0.0.1");
+        bizContent.setTotal_fee(paymentOrder.getAmount().toString());
+        bizContent.setMer_url(icbcConfig.getNotifyBaseUrl() + "/api/v1/payment/callbacks/icbc");
+        bizContent.setIcbc_appid(icbcConfig.getAppId());
+        bizContent.setNotify_type("HS");
+        bizContent.setResult_type("0");
+        bizContent.setExpire_time(paymentOrder.getExpiredSeconds().toString());
+
+        // 微信支付需要 shop_appid 和 open_id
+        if (paymentOrder.getPayMode() == PayMode.WECHAT) {
+            bizContent.setShop_appid(icbcConfig.getShopAppid());
+            bizContent.setOpen_id(paymentOrder.getOpenId() != null ? paymentOrder.getOpenId() : "");
+        }
+
+        // 支付宝生活号需要 union_id
+        if (paymentOrder.getOpenId() != null && !paymentOrder.getOpenId().isEmpty()) {
+            bizContent.setOpen_id(paymentOrder.getOpenId());
+        }
+
+        // 附加数据
+        if (paymentOrder.getAttach() != null) {
+            bizContent.setAttach(paymentOrder.getAttach());
+        }
+
+        request.setBizContent(bizContent);
+
+        // 记录请求参数
+        String requestParams = com.alibaba.fastjson2.JSON.toJSONString(bizContent);
+
+        long startTime = System.currentTimeMillis();
+        CardbusinessAggregatepayB2cOnlineConsumepurchaseResponseV1 response;
+        try {
+            response = client.execute(request, clientFactory.generateMsgId());
+        } catch (Exception e) {
+            log.error("ICBC prepay request failed", e);
+            return new CreatePrepayResponse(
+                false,
+                "SYSTEM_ERROR",
+                e.getMessage(),
+                null,
+                null,
+                null,
+                System.currentTimeMillis() - startTime,
+                requestParams,
+                null
+            );
+        }
+        long executionTime = System.currentTimeMillis() - startTime;
+
+        // 解析响应
+        boolean success = response.getReturnCode() == 0;
+        String responseBody = com.alibaba.fastjson2.JSON.toJSONString(response);
+
+        // 根据支付方式提取对应的 data_package
+        String dataPackage = null;
+        String tradeType = null;
+        if (success) {
+            if (paymentOrder.getPayMode() == PayMode.WECHAT) {
+                dataPackage = response.getWx_data_package();
+            } else if (paymentOrder.getPayMode() == PayMode.ALIPAY) {
+                dataPackage = response.getZfb_data_package();
+            } else if (paymentOrder.getPayMode() == PayMode.UNIONPAY) {
+                dataPackage = response.getUnion_data_package();
+            }
+            tradeType = response.getTrade_type();
+        }
+
+        return new CreatePrepayResponse(
+            success,
+            String.valueOf(response.getReturnCode()),
+            response.getReturnMsg(),
+            success ? response.getOrder_id() : null,
+            dataPackage,
+            tradeType,
             executionTime,
             requestParams,
             responseBody
