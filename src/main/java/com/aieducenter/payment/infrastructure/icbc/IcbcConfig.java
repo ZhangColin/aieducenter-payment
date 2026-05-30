@@ -73,4 +73,15 @@ public class IcbcConfig {
      * <p>用于拼接工行异步通知地址: {notifyBaseUrl}/api/v1/payment/callbacks/icbc</p>
      */
     private String notifyBaseUrl;
+
+    /**
+     * 预支付接口地址（聚合消费下单）
+     */
+    private String prepayUrl;
+
+    /**
+     * 商户在微信开放平台注册的APPID
+     * <p>工行侧绑定，用于微信/支付宝/云闪付支付</p>
+     */
+    private String shopAppid;
 }
