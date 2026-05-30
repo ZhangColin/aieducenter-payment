@@ -5,6 +5,7 @@ import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
 import com.aieducenter.payment.application.mapper.PaymentOrderMapper;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.aggregate.PaymentLog;
+import com.aieducenter.payment.domain.enums.AccessType;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.port.PaymentGatewayPort;
 import com.aieducenter.payment.domain.port.response.CreatePaymentResponse;
@@ -66,6 +67,8 @@ public class PaymentAppService {
 
         // 自动设置客户端 IP
         paymentOrder.setClientIp(clientIp);
+        // 二维码支付设置 accessType = H5
+        paymentOrder.setAccessType(AccessType.H5);
 
         // 2. 检查业务订单号是否已存在
         if (paymentOrderRepository.existsByPaymentOrderNo(paymentOrder.getPaymentOrderNo())) {
