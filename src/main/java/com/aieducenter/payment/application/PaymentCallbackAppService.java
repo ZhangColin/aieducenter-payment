@@ -4,6 +4,8 @@ import com.aieducenter.payment.application.dto.callback.IcbcCallbackParam;
 import com.aieducenter.payment.application.mapper.PaymentOrderMapper;
 import com.aieducenter.payment.domain.aggregate.PaymentLog;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
+import com.aieducenter.payment.domain.enums.AccessType;
+import com.aieducenter.payment.domain.enums.PayMode;
 import com.aieducenter.payment.domain.enums.PaymentChannel;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.repository.PaymentLogRepository;
@@ -76,6 +78,20 @@ public class PaymentCallbackAppService {
             Long actualAmount = parseAmount(callback.paymentAmt());
             PaymentChannel paymentChannel = mapPaymentChannel(callback.payType());
             order.markAsPaid(callback.orderId(), callback.thirdTradeNo(), paymentChannel, actualAmount);
+
+            // 回填 payMode 和 accessType
+            if (order.getPayMode() == null) {
+                PayMode payMode = mapPayMode(callback.payType());
+                if (payMode != null) {
+                    order.setPayMode(payMode);
+                }
+            }
+            if (order.getAccessType() == null) {
+                AccessType accessType = mapAccessType(callback.accessType());
+                if (accessType != null) {
+                    order.setAccessType(accessType);
+                }
+            }
         } else {
             order.markAsFailed(callback.returnMsg());
         }
@@ -144,6 +160,26 @@ public class PaymentCallbackAppService {
     private PaymentChannel mapPaymentChannel(String payType) {
         // 所有通过工行网关的支付统一为 ICBC 渠道
         return PaymentChannel.ICBC;
+    }
+
+    private PayMode mapPayMode(String payType) {
+        if (payType == null) return null;
+        for (PayMode pm : PayMode.values()) {
+            if (pm.getCode().toString().equals(payType)) {
+                return pm;
+            }
+        }
+        return null;
+    }
+
+    private AccessType mapAccessType(String accessType) {
+        if (accessType == null) return null;
+        for (AccessType at : AccessType.values()) {
+            if (at.getCode().toString().equals(accessType)) {
+                return at;
+            }
+        }
+        return null;
     }
 
     private String buildErrorResponse() {
