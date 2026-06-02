@@ -12,6 +12,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/hsb/callback")
@@ -47,5 +50,20 @@ public class HsbCallbackController {
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_JSON)
             .body(response);
+    }
+
+    @PostMapping(value = "/reconciliation", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "接收建行惠市宝对账文件推送")
+    public ResponseEntity<String> handleReconciliationCallback(
+            @RequestParam("File_Smry_Inf") String fileSmryInf,
+            @RequestParam("Sign_Inf") String signInf,
+            @RequestPart MultipartFile file
+    ) {
+        log.info("Received HSB reconciliation file push: fileSmryInf={}, fileName={}, fileSize={}",
+                fileSmryInf, file.getOriginalFilename(), file.getSize());
+        String response = callbackAppService.handleReconciliationCallback(fileSmryInf, signInf, file);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
     }
 }
