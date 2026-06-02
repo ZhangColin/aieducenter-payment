@@ -15,6 +15,7 @@ public class HsbConfig {
     private String platformPublicKey;
     private String initiatorSystemId = "00000";
     private String initiatorChannelCode = "0000000000000000000000000";
+    private String reconciliationStoragePath = "data/reconciliation";
     private Version version = new Version();
 
     @Data
