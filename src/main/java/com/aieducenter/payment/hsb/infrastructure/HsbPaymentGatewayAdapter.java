@@ -48,12 +48,11 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         json.put("Ccy", order.getCurrency());
         json.put("Ordr_Tamt", fenToYuan(order.getTotalAmount()));
         json.put("Txn_Tamt", fenToYuan(order.getTxnTotalAmount()));
-        // TODO 建行配置暂不支持 Hdcg_Brs_Id，待确认后启用
-        // if (cn.hutool.core.util.StrUtil.isNotBlank(hsbConfig.getPlatformMerchantId())) {
-        //     json.put("Hdcg_Brs_Id", hsbConfig.getPlatformMerchantId());
-        // } else if (cn.hutool.core.util.StrUtil.isNotBlank(order.getFeeBearerId())) {
-        //     json.put("Hdcg_Brs_Id", order.getFeeBearerId());
-        // }
+        if (cn.hutool.core.util.StrUtil.isNotBlank(hsbConfig.getPlatformMerchantId())) {
+            json.put("Hdcg_Brs_Id", hsbConfig.getPlatformMerchantId());
+        } else if (cn.hutool.core.util.StrUtil.isNotBlank(order.getFeeBearerId())) {
+            json.put("Hdcg_Brs_Id", order.getFeeBearerId());
+        }
         json.put("Vno", hsbConfig.getVersion().getPlaceOrder());
         json.put("Clrg_Dt", order.resolveClrgDt());
         if (cn.hutool.core.util.StrUtil.isNotBlank(order.getPageReturnUrl())) {
@@ -84,7 +83,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
             long executionTime = System.currentTimeMillis() - startTime;
             log.error("HSB createPayment failed", e);
             return new CreateHsbPaymentResponse(false, "SYSTEM_ERROR", e.getMessage(),
-                null, null, null, null, executionTime, requestParams, null, null);
+                    null, null, null, null, executionTime, requestParams, null, null);
         }
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -115,7 +114,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         }
 
         return new CreateHsbPaymentResponse(success, returnCode, returnMsg,
-            cshdkUrl, payUrl, payQrCode, primOrderNo, executionTime, requestParams, responseBody, subOrderIdMap);
+                cshdkUrl, payUrl, payQrCode, primOrderNo, executionTime, requestParams, responseBody, subOrderIdMap);
     }
 
     @Override
@@ -144,7 +143,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         } catch (Exception e) {
             long executionTime = System.currentTimeMillis() - startTime;
             return new QueryHsbPaymentResponse(false, "SYSTEM_ERROR", e.getMessage(),
-                null, null, null, executionTime, null);
+                    null, null, null, executionTime, null);
         }
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -167,7 +166,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         }
 
         return new QueryHsbPaymentResponse(success, returnCode, response.getString("Svc_Rsp_Cd"),
-            paymentStatus, pyTrnNoResult, actualAmount, executionTime, responseBody);
+                paymentStatus, pyTrnNoResult, actualAmount, executionTime, responseBody);
     }
 
     @Override
@@ -207,7 +206,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         } catch (Exception e) {
             long executionTime = System.currentTimeMillis() - startTime;
             return new CreateHsbRefundResponse(false, "SYSTEM_ERROR", e.getMessage(),
-                null, null, executionTime, requestParams, null);
+                    null, null, executionTime, requestParams, null);
         }
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -224,7 +223,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         }
 
         return new CreateHsbRefundResponse(success, returnCode, response.getString("Svc_Rsp_Cd"),
-            refundStatus, superRefundNo, executionTime, requestParams, responseBody);
+                refundStatus, superRefundNo, executionTime, requestParams, responseBody);
     }
 
     @Override
@@ -253,7 +252,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         } catch (Exception e) {
             long executionTime = System.currentTimeMillis() - startTime;
             return new QueryHsbRefundResponse(false, "SYSTEM_ERROR", e.getMessage(),
-                null, null, executionTime, null);
+                    null, null, executionTime, null);
         }
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -270,7 +269,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         }
 
         return new QueryHsbRefundResponse(success, returnCode, response.getString("Svc_Rsp_Cd"),
-            refundStatus, superRefundNo, executionTime, responseBody);
+                refundStatus, superRefundNo, executionTime, responseBody);
     }
 
     @Override
@@ -299,7 +298,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         } catch (Exception e) {
             long executionTime = System.currentTimeMillis() - startTime;
             return new ConfirmSettlementResponse(false, "SYSTEM_ERROR", e.getMessage(),
-                executionTime, requestParams, null);
+                    executionTime, requestParams, null);
         }
         long executionTime = System.currentTimeMillis() - startTime;
 
@@ -308,7 +307,7 @@ public class HsbPaymentGatewayAdapter implements HsbPaymentGatewayPort {
         boolean success = "00".equals(returnCode);
 
         return new ConfirmSettlementResponse(success, returnCode, response.getString("Svc_Rsp_Cd"),
-            executionTime, requestParams, responseBody);
+                executionTime, requestParams, responseBody);
     }
 
     private String fenToYuan(Long fen) {

@@ -26,7 +26,7 @@ gateway:
     refund-url: ${ICBC_REFUND_URL:https://gw.open.icbc.com.cn/api/cardbusiness/aggregatepay/b2c/online/merrefund/V1}
     refund-query-url: ${ICBC_REFUND_QUERY_URL:https://gw.open.icbc.com.cn/api/cardbusiness/aggregatepay/b2c/online/refundqry/V1}
     prepay-url: ${ICBC_PREPAY_URL:https://gw.open.icbc.com.cn/api/cardbusiness/aggregatepay/b2c/online/consumepurchase/V1}
-    shop-appid: ${ICBC_SHOP_APPID:}
+    shop-appid: ${ICBC_SHOP_APPID:wx915ce89322d33a25}
 
 # 支付默认配置
 payment:

@@ -1,8 +1,11 @@
 package com.aieducenter.payment.endpoints.api.v1;
 
 import com.aieducenter.payment.application.PaymentAppService;
+import com.aieducenter.payment.application.PrepayAppService;
 import com.aieducenter.payment.application.dto.command.CreatePaymentCommand;
+import com.aieducenter.payment.application.dto.command.CreatePrepayCommand;
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
+import com.aieducenter.payment.application.dto.response.PrepayOrderResponse;
 import com.cartisan.core.context.RequestContext;
 import com.cartisan.openapi.annotation.RequireSignature;
 import com.cartisan.web.response.ApiResponse;
@@ -34,6 +37,21 @@ public class PaymentApiV1Controller {
         String businessSystemName = RequestContext.getCallerAppName();
         String clientIp = IpUtil.getClientIp(request);
         PaymentOrderResponse response = paymentAppService.createPayment(command, businessSystemName, clientIp);
+        return ApiResponse.ok(response);
+    }
+
+    private final PrepayAppService prepayAppService;
+
+    @PostMapping("/prepay")
+    @RequireSignature
+    @Operation(summary = "创建预支付订单")
+    public ApiResponse<PrepayOrderResponse> createPrepay(
+            @Valid @RequestBody CreatePrepayCommand command,
+            HttpServletRequest request
+    ) {
+        String businessSystemName = RequestContext.getCallerAppName();
+        String clientIp = IpUtil.getClientIp(request);
+        PrepayOrderResponse response = prepayAppService.createPrepay(command, businessSystemName, clientIp);
         return ApiResponse.ok(response);
     }
 
