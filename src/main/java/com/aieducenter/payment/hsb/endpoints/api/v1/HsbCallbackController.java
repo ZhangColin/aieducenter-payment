@@ -12,9 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 @RestController
 @RequestMapping("/api/v1/hsb/callback")
@@ -57,10 +56,15 @@ public class HsbCallbackController {
     public ResponseEntity<String> handleReconciliationCallback(
             @RequestParam("File_Smry_Inf") String fileSmryInf,
             @RequestParam("Sign_Inf") String signInf,
-            @RequestPart MultipartFile file
+            MultipartHttpServletRequest request
     ) {
+        MultipartFile file = null;
+        var fileNames = request.getFileNames();
+        if (fileNames.hasNext()) {
+            file = request.getFile(fileNames.next());
+        }
         log.info("Received HSB reconciliation file push: fileSmryInf={}, fileName={}, fileSize={}",
-                fileSmryInf, file.getOriginalFilename(), file.getSize());
+                fileSmryInf, file != null ? file.getOriginalFilename() : "null", file != null ? file.getSize() : 0);
         String response = callbackAppService.handleReconciliationCallback(fileSmryInf, signInf, file);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)

@@ -49,7 +49,7 @@ hsb:
     confirm-settlement: "4"
   initiator-system-id: "00000"
   initiator-channel-code: "0000000000000000000000000"
-  reconciliation-storage-path: ${HSB_RECONCILIATION_STORAGE_PATH:data/reconciliation}
+  reconciliation-storage-path: ${HSB_RECONCILIATION_STORAGE_PATH:/data/reconciliation}
 
 # 过期订单定时任务
 scheduler:
