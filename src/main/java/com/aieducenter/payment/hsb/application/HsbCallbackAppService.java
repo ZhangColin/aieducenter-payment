@@ -24,7 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Service
 @RequiredArgsConstructor
@@ -173,6 +178,47 @@ public class HsbCallbackAppService {
         String rcvTm = java.time.LocalDateTime.now().format(
             java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         return "{\"Svc_Rsp_St\":\"00\",\"Rcv_Tm\":\"" + rcvTm + "\",\"Ittparty_Tms\":\"" + ittpartyTms + "\"}";
+    }
+
+    public String handleReconciliationCallback(String fileSmryInf, String signInf, MultipartFile file) {
+        log.info("Received HSB reconciliation callback: fileSmryInf={}", fileSmryInf);
+
+        String signStr = "File_Smry_Inf=" + fileSmryInf;
+        boolean verified = verifyReconciliationSign(hsbConfig.getPlatformPublicKey(), signStr, signInf);
+
+        if (!verified) {
+            log.warn("HSB reconciliation callback signature verification failed");
+            return buildReconciliationResponse(false);
+        }
+
+        if (file == null || file.isEmpty()) {
+            log.warn("HSB reconciliation callback: empty file");
+            return buildReconciliationResponse(false);
+        }
+
+        try {
+            String dateDir = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            Path dirPath = Path.of(hsbConfig.getReconciliationStoragePath(), dateDir);
+            Files.createDirectories(dirPath);
+
+            String fileName = System.currentTimeMillis() + ".zip";
+            Path filePath = dirPath.resolve(fileName);
+            file.transferTo(filePath);
+
+            log.info("HSB reconciliation file saved: {}, size: {}", filePath, file.getSize());
+            return buildReconciliationResponse(true);
+        } catch (IOException e) {
+            log.error("HSB reconciliation callback: failed to save file", e);
+            return buildReconciliationResponse(false);
+        }
+    }
+
+    private String buildReconciliationResponse(boolean success) {
+        return "{\"Svc_Rsp_St\":\"" + (success ? "00" : "01") + "\"}";
+    }
+
+    protected boolean verifyReconciliationSign(String platformPublicKey, String signStr, String signInf) {
+        return HsbSignUtil.verifySign(platformPublicKey, signStr, signInf);
     }
 
     private Long yuanToFen(String yuan) {
