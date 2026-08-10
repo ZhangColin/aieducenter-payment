@@ -20,12 +20,13 @@ spring:
     show-sql: false
 
 # OpenAPI 签名配置
+# payment 是 openapi provider（校验入站签名），非 caller——不做任何出站签名调用，故无 self.* 凭据。
+# 凭据源为 app-registry 的 bootstrap 端点（@NoSignature、内网-only，ADR-0002）：
+#   GET {APP_REGISTRY_BASE_URL}/api/app-registry/api-keys/{apiKey} → ApiKeyInfo（含明文 apiSecret）
+# 字面 {apiKey} 段为占位符，由框架 RemoteApiKeyProvider 用调用方 X-Api-Key 的值替换。
 cartisan:
   openapi:
-    self:
-      app-id: ${OPENAPI_APP_ID:366EIGGF0SF3DI6XSEE1EV1LF2XOZETI}
-      app-secret: ${OPENAPI_APP_SECRET:ltAiTC+gha6THssQjYOXbH8wryZfhPJoRzAYCUFXQtU=}
-    apikey-service-url: https://openapi.aieducenter.com/api/v1/api-keys/by-appId
+    apikey-service-url: ${APP_REGISTRY_BASE_URL:http://localhost:8088}/api/app-registry/api-keys/{apiKey}
 
 management:
   endpoints:

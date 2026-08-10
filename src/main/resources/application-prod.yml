@@ -36,3 +36,10 @@ payment:
 scheduler:
   payment-expiration: "0 */5 * * * *"
   refund-query: "0 */5 * * * *"
+
+# OpenAPI 签名配置
+# prod 用裸 ${APP_REGISTRY_BASE_URL}（无默认值）：缺失 env 时启动即失败（fail-fast），
+# 避免静默回落 localhost 导致验签实效。要求 APP_REGISTRY_BASE_URL 解析到 app-registry 的内网地址。
+cartisan:
+  openapi:
+    apikey-service-url: ${APP_REGISTRY_BASE_URL}/api/app-registry/api-keys/{apiKey}

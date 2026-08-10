@@ -130,6 +130,14 @@
             <version>0.1.0-SNAPSHOT</version>
             <scope>test</scope>
         </dependency>
+        <!-- WireMock：stub app-registry 的 bootstrap 端点，验签集成测试经真实 RemoteApiKeyProvider 路径消费（#2）。
+             用 standalone（自含 Jetty）避免与 Spring Boot 3.4 锁的 Jetty 版本冲突。 -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.9.1</version>
+            <scope>test</scope>
+        </dependency>
 
         <!-- ICBC SDK dependencies -->
         <dependency>
