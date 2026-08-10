@@ -45,7 +45,7 @@ public class PaymentLog extends AuditableSoftDeletable implements AggregateRoot<
 
     /**
      * 银行编码
-     * <p>如: ICBC, ABC, CCB</p>
+     * <p>如: ICBC, ABC</p>
      */
     @Getter
     @Column(name = "bank_code", nullable = false, length = 16)

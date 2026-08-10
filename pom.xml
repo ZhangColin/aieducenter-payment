@@ -159,14 +159,6 @@
             <version>2.0.53</version>
         </dependency>
 
-        <!-- CCB HSB SDK dependencies -->
-        <dependency>
-            <groupId>com.ccb</groupId>
-            <artifactId>mktpaysign</artifactId>
-            <version>1.0</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/lib/ccb/mktpaysign.jar</systemPath>
-        </dependency>
         <dependency>
             <groupId>commons-codec</groupId>
             <artifactId>commons-codec</artifactId>

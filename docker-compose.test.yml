@@ -9,8 +9,6 @@ services:
       - .env.test
     environment:
       - SPRING_PROFILES_ACTIVE=test
-    extra_hosts:
-      - "marketpaypl4.dev.jh:42.240.3.133"
 #    networks:
 #      - webnet
     healthcheck:
@@ -19,16 +17,11 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
-    volumes:
-      - /home/aieducenter-payment/reconciliation-data:/data/reconciliation
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  reconciliation-data:
 
 #networks:
 #  webnet:

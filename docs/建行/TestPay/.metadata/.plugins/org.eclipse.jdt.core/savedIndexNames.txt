@@ -1,1 +1,0 @@
-INDEX VERSION 1.131+D:\demo\TestPay\.metadata\.plugins\org.eclipse.jdt.core
