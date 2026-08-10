@@ -9,8 +9,8 @@
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
 | `baseUrl` | 服务地址 | `http://localhost:8080` |
-| `appId` | API Key（创建 ApiKey 时生成） | `A1B2C3D4E5F6...` |
-| `appSecret` | API Secret（创建 ApiKey 时生成） | `abc123...` |
+| `apiKey` | API Key（即 app-registry 登记的 `appCode`，随请求以 `X-Api-Key` 头发送） | `A1B2C3D4E5F6...` |
+| `apiSecret` | API Secret（HMAC-SHA256 签名密钥） | `abc123...` |
 
 ### 2. 添加前置脚本
 
@@ -18,16 +18,16 @@
 
 ```javascript
 // ========================================================
-// Apifox 前置脚本 — HMAC-SHA256 签名自动计算 (v3)
+// Apifox 前置脚本 — HMAC-SHA256 签名自动计算 (v4)
 // ========================================================
-// 环境变量: appId, appSecret, baseUrl
+// 环境变量: apiKey, apiSecret, baseUrl
 // ========================================================
 
-const appId = pm.environment.get("appId");
-const appSecret = pm.environment.get("appSecret");
+const apiKey = pm.environment.get("apiKey");
+const apiSecret = pm.environment.get("apiSecret");
 
-if (!appId || !appSecret) {
-    throw new Error("请先在环境变量中设置 appId 和 appSecret");
+if (!apiKey || !apiSecret) {
+    throw new Error("请先在环境变量中设置 apiKey 和 apiSecret");
 }
 
 const CryptoJS = require("crypto-js");
@@ -65,7 +65,7 @@ if (queryIdx > -1) {
 
 // ---- Step 4: 按 key 字典序排列，拼接为 key=value&... ----
 const allParams = Object.assign({
-    appId: appId,
+    apiKey: apiKey,
     bodyDigest: bodyDigest,
     nonce: nonce,
     timestamp: timestamp
@@ -76,10 +76,10 @@ const stringToSign = Object.keys(allParams).sort().map(function(key) {
 }).join("&");
 
 // ---- Step 5: 计算 HMAC-SHA256 签名 ----
-const sign = CryptoJS.HmacSHA256(stringToSign, appSecret).toString(CryptoJS.enc.Hex);
+const sign = CryptoJS.HmacSHA256(stringToSign, apiSecret).toString(CryptoJS.enc.Hex);
 
 // ---- Step 6: 注入 Headers ----
-pm.request.headers.upsert({ key: "X-App-Id", value: appId });
+pm.request.headers.upsert({ key: "X-Api-Key", value: apiKey });
 pm.request.headers.upsert({ key: "X-Timestamp", value: timestamp });
 pm.request.headers.upsert({ key: "X-Nonce", value: nonce });
 pm.request.headers.upsert({ key: "X-Sign", value: sign });
@@ -105,20 +105,20 @@ Step 1: 计算 bodyDigest
   GET:  bodyDigest = hex(SHA-256(""))
 
 Step 2: 收集参与签名的参数
-  - 系统参数: appId, bodyDigest, nonce, timestamp
+  - 系统参数: apiKey, bodyDigest, nonce, timestamp
   - 查询参数: URL 中所有 ?key=value
 
 Step 3: 按 key 字典序排列，拼接为 key1=value1&key2=value2&...
 
 Step 4: 计算签名
-  sign = hex(HMAC-SHA256(拼接字符串, appSecret))
+  sign = hex(HMAC-SHA256(拼接字符串, apiSecret))
 ```
 
 ### HTTP Headers
 
 | Header | 说明 | 由脚本自动设置 |
 |--------|------|:-:|
-| `X-App-Id` | API Key（即 appId） | 是 |
+| `X-Api-Key` | API Key（即 apiKey） | 是 |
 | `X-Timestamp` | 当前时间戳（秒级） | 是 |
 | `X-Nonce` | UUID 随机串 | 是 |
 | `X-Sign` | HMAC-SHA256 签名结果 | 是 |
@@ -152,5 +152,5 @@ Step 4: 计算签名
 
 1. **bodyDigest 与 JSON 格式**：bodyDigest 是对 HTTP 传输的原始字节做 SHA-256，Apifox 中 Body 编辑器的内容就是实际传输的内容，确保服务端收到的是同样的字节即可
 2. **时间窗口**：默认 5 分钟容忍窗口（300 秒），客户端与服务端时钟需大致同步
-3. **appSecret 安全**：appSecret 仅在客户端本地使用，绝不在网络中传输
+3. **apiSecret 安全**：apiSecret 仅在客户端本地用于计算签名，绝不在网络中传输；网络中只传 `X-Api-Key`（即 `apiKey`，值上等于 `appCode`）
 4. **控制台日志**：Apifox 控制台会打印完整的签名计算过程，便于排查问题
