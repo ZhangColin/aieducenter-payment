@@ -24,6 +24,12 @@ public enum PaymentMessage implements CodeMessage {
     PAYMENT_ORDER_NOT_FOUND(404, "PAY_030", "支付订单不存在"),
     REFUND_ORDER_NOT_FOUND(404, "PAY_031", "退款订单不存在"),
 
+    // ========== 操作日志校验错误 (400) ==========
+    OPERATION_LOG_TARGET_TYPE_REQUIRED(400, "PAY_050", "操作日志目标类型不能为空"),
+    OPERATION_LOG_TARGET_NO_REQUIRED(400, "PAY_051", "操作日志目标单号不能为空"),
+    OPERATION_LOG_OPERATION_REQUIRED(400, "PAY_052", "操作日志操作类型不能为空"),
+    OPERATION_LOG_RESULT_REQUIRED(400, "PAY_053", "操作日志结果不能为空"),
+
     // ========== 业务限制 (403) ==========
     PAYMENT_ORDER_EXPIRED(403, "PAY_040", "支付订单已过期"),
     PAYMENT_ORDER_FAILED(403, "PAY_041", "支付订单已失败"),
