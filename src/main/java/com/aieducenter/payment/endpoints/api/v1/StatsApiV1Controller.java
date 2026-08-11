@@ -1,7 +1,11 @@
 package com.aieducenter.payment.endpoints.api.v1;
 
 import com.aieducenter.payment.application.StatsAppService;
+import com.aieducenter.payment.application.dto.response.AnomaliesResponse;
+import com.aieducenter.payment.application.dto.response.ByBusinessSystemResponse;
+import com.aieducenter.payment.application.dto.response.ByChannelResponse;
 import com.aieducenter.payment.application.dto.response.GatewayHealthResponse;
+import com.aieducenter.payment.application.dto.response.OperationsActivityResponse;
 import com.aieducenter.payment.application.dto.response.OperationsAuditResponse;
 import com.aieducenter.payment.application.dto.response.PaymentOverviewResponse;
 import com.aieducenter.payment.application.dto.response.StatusDistributionResponse;
@@ -68,5 +72,42 @@ public class StatsApiV1Controller {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
     ) {
         return ApiResponse.ok(statsAppService.operationsAudit(from, to));
+    }
+
+    @GetMapping("/by-business-system")
+    @RequireSignature
+    @Operation(summary = "按业务系统维度：各业务系统支付/退款笔数·金额·成功率·退款率")
+    public ApiResponse<ByBusinessSystemResponse> byBusinessSystem(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+    ) {
+        return ApiResponse.ok(statsAppService.byBusinessSystem(from, to));
+    }
+
+    @GetMapping("/by-channel")
+    @RequireSignature
+    @Operation(summary = "按渠道维度：各支付方式/接入类型笔数·金额·成功率")
+    public ApiResponse<ByChannelResponse> byChannel(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+    ) {
+        return ApiResponse.ok(statsAppService.byChannel(from, to));
+    }
+
+    @GetMapping("/anomalies")
+    @RequireSignature
+    @Operation(summary = "异常监控：长时 PENDING/REFUNDING 单 + 近期查询/回调失败计数（阈值可配）")
+    public ApiResponse<AnomaliesResponse> anomalies() {
+        return ApiResponse.ok(statsAppService.anomalies());
+    }
+
+    @GetMapping("/operations/activity")
+    @RequireSignature
+    @Operation(summary = "操作活跃度：各操作员操作类型/笔数 + 通知重发次数及来源业务系统")
+    public ApiResponse<OperationsActivityResponse> operationsActivity(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+    ) {
+        return ApiResponse.ok(statsAppService.operationsActivity(from, to));
     }
 }

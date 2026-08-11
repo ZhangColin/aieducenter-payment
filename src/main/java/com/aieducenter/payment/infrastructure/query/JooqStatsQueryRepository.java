@@ -7,12 +7,19 @@ import com.aieducenter.payment.domain.enums.RefundStatus;
 import com.aieducenter.payment.domain.enums.StatsGranularity;
 import com.aieducenter.payment.infrastructure.query.projection.AuditOperationCount;
 import com.aieducenter.payment.infrastructure.query.projection.AuditorAuditCount;
+import com.aieducenter.payment.infrastructure.query.projection.BusinessSystemPaymentRollup;
+import com.aieducenter.payment.infrastructure.query.projection.BusinessSystemRefundRollup;
+import com.aieducenter.payment.infrastructure.query.projection.ChannelPaymentRollup;
+import com.aieducenter.payment.infrastructure.query.projection.FailureCountByType;
 import com.aieducenter.payment.infrastructure.query.projection.GatewayInterfaceRollup;
 import com.aieducenter.payment.infrastructure.query.projection.GatewayReturnCodeCount;
+import com.aieducenter.payment.infrastructure.query.projection.NotifyResendBySystem;
+import com.aieducenter.payment.infrastructure.query.projection.OperatorOperationCount;
 import com.aieducenter.payment.infrastructure.query.projection.PaymentStatusCount;
 import com.aieducenter.payment.infrastructure.query.projection.PaymentTrendBucket;
 import com.aieducenter.payment.infrastructure.query.projection.RefundStatusCount;
 import com.aieducenter.payment.infrastructure.query.projection.RefundTrendBucket;
+import com.aieducenter.payment.infrastructure.query.projection.StuckOrderCount;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.Query;
@@ -194,6 +201,171 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
         q.bind("manualCode", AuditType.MANUAL.getCode());
         bindWindow(q, from, to);
         return q.fetchOne(0, BigDecimal.class);
+    }
+
+    // ==================== 统计二档（issue #18） ====================
+
+    @Override
+    public List<BusinessSystemPaymentRollup> businessSystemPaymentRollup(LocalDateTime from, LocalDateTime to) {
+        // status = PaymentStatus.PAID.getCode() 标记支付成功（CASE 聚合到每组）
+        // business_system_name 为 NOT NULL（V1），无需 IS NOT NULL 过滤。
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT business_system_name AS "businessSystemName",
+                       COUNT(*) AS "orderCount",
+                       COALESCE(SUM(amount), 0) AS "totalAmount",
+                       SUM(CASE WHEN status = :paidCode THEN 1 ELSE 0 END) AS "paidCount",
+                       COALESCE(SUM(CASE WHEN status = :paidCode THEN actual_amount ELSE 0 END), 0) AS "paidAmount"
+                  FROM pay_payment_orders
+                """ + whereDeleted(from, to) + """
+                 GROUP BY business_system_name
+                 ORDER BY business_system_name
+                """);
+        q.bind("paidCode", PaymentStatus.PAID.getCode());
+        bindWindow(q, from, to);
+        return q.fetchInto(BusinessSystemPaymentRollup.class);
+    }
+
+    @Override
+    public List<BusinessSystemRefundRollup> businessSystemRefundRollup(LocalDateTime from, LocalDateTime to) {
+        // status = RefundStatus.SUCCESS.getCode() 标记退款成功
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT business_system_name AS "businessSystemName",
+                       COUNT(*) AS "orderCount",
+                       COALESCE(SUM(refund_amount), 0) AS "totalAmount",
+                       SUM(CASE WHEN status = :successCode THEN 1 ELSE 0 END) AS "refundedCount",
+                       COALESCE(SUM(CASE WHEN status = :successCode THEN refund_amount ELSE 0 END), 0) AS "refundedAmount"
+                  FROM pay_refund_orders
+                """ + whereDeleted(from, to) + """
+                 GROUP BY business_system_name
+                 ORDER BY business_system_name
+                """);
+        q.bind("successCode", RefundStatus.SUCCESS.getCode());
+        bindWindow(q, from, to);
+        return q.fetchInto(BusinessSystemRefundRollup.class);
+    }
+
+    @Override
+    public List<ChannelPaymentRollup> payModeRollup(LocalDateTime from, LocalDateTime to) {
+        return channelRollup(from, to, "pay_mode");
+    }
+
+    @Override
+    public List<ChannelPaymentRollup> accessTypeRollup(LocalDateTime from, LocalDateTime to) {
+        return channelRollup(from, to, "access_type");
+    }
+
+    /**
+     * 按某渠道列（pay_mode / access_type）聚合支付。
+     *
+     * <p>列名 {@code column} 是本仓内部白名单字面量（两选一），不来自外部输入，无注入风险。
+     * 仅聚合该列非空的行（预支付前未赋值的支付单不计入渠道分布）。</p>
+     */
+    private List<ChannelPaymentRollup> channelRollup(LocalDateTime from, LocalDateTime to, String column) {
+        // status = PaymentStatus.PAID.getCode() 标记支付成功
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT %s AS "channelCode",
+                       COUNT(*) AS "orderCount",
+                       COALESCE(SUM(amount), 0) AS "totalAmount",
+                       SUM(CASE WHEN status = :paidCode THEN 1 ELSE 0 END) AS "paidCount",
+                       COALESCE(SUM(CASE WHEN status = :paidCode THEN actual_amount ELSE 0 END), 0) AS "paidAmount"
+                  FROM pay_payment_orders
+                """.formatted(column)
+                + whereDeleted(from, to) + """
+                   AND %s IS NOT NULL
+                 GROUP BY %s
+                 ORDER BY %s
+                """.formatted(column, column, column));
+        q.bind("paidCode", PaymentStatus.PAID.getCode());
+        bindWindow(q, from, to);
+        return q.fetchInto(ChannelPaymentRollup.class);
+    }
+
+    @Override
+    public StuckOrderCount longPendingPayments(long pendingHours) {
+        // status = PaymentStatus.PENDING.getCode()；cutoff = NOW() - INTERVAL '1 hour' * :hours
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT COUNT(*) AS "orderCount",
+                       COALESCE(SUM(amount), 0) AS "totalAmount"
+                  FROM pay_payment_orders
+                 WHERE deleted = FALSE
+                   AND status = :pendingCode
+                   AND created_at < NOW() - INTERVAL '1 hour' * :hours
+                """);
+        q.bind("pendingCode", PaymentStatus.PENDING.getCode());
+        q.bind("hours", pendingHours);
+        return q.fetchOneInto(StuckOrderCount.class);
+    }
+
+    @Override
+    public StuckOrderCount longRefundingRefunds(long refundingHours) {
+        // status = RefundStatus.REFUNDING.getCode()
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT COUNT(*) AS "orderCount",
+                       COALESCE(SUM(refund_amount), 0) AS "totalAmount"
+                  FROM pay_refund_orders
+                 WHERE deleted = FALSE
+                   AND status = :refundingCode
+                   AND created_at < NOW() - INTERVAL '1 hour' * :hours
+                """);
+        q.bind("refundingCode", RefundStatus.REFUNDING.getCode());
+        q.bind("hours", refundingHours);
+        return q.fetchOneInto(StuckOrderCount.class);
+    }
+
+    @Override
+    public List<FailureCountByType> recentFailureCounts(long windowHours) {
+        // 近期查询/回调失败：success=FALSE AND log_type IN (查询/回调三类)
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT log_type AS "logType",
+                       COUNT(*) AS "failureCount"
+                  FROM pay_payment_logs
+                 WHERE deleted = FALSE
+                   AND success = FALSE
+                   AND log_type IN (:q1, :q2, :q3)
+                   AND created_at > NOW() - INTERVAL '1 hour' * :hours
+                 GROUP BY log_type
+                """);
+        q.bind("q1", "PAYMENT_QUERY");
+        q.bind("q2", "REFUND_QUERY");
+        q.bind("q3", "PAYMENT_CALLBACK");
+        q.bind("hours", windowHours);
+        return q.fetchInto(FailureCountByType.class);
+    }
+
+    @Override
+    public List<OperatorOperationCount> operatorOperationCounts(LocalDateTime from, LocalDateTime to) {
+        // 全操作（AUDIT_APPROVE/AUDIT_REJECT/NOTIFY_RESEND）按操作员×操作类型聚合
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT operator_id AS "operatorId",
+                       operator_name AS "operatorName",
+                       operation AS "operation",
+                       COUNT(*) AS "opCount"
+                  FROM pay_operation_logs
+                 WHERE deleted = FALSE
+                """ + windowClause(from, to, "created_at", true) + """
+                 GROUP BY operator_id, operator_name, operation
+                 ORDER BY operator_id
+                """);
+        bindWindow(q, from, to);
+        return q.fetchInto(OperatorOperationCount.class);
+    }
+
+    @Override
+    public List<NotifyResendBySystem> notifyResendBySystem(LocalDateTime from, LocalDateTime to) {
+        // 仅 NOTIFY_RESEND，按来源业务系统（operator_system）归组
+        ResultQuery<?> q = dsl.resultQuery("""
+                SELECT operator_system AS "operatorSystem",
+                       COUNT(*) AS "resendCount"
+                  FROM pay_operation_logs
+                 WHERE deleted = FALSE
+                   AND operation = :notifyCode
+                """ + windowClause(from, to, "created_at", true) + """
+                 GROUP BY operator_system
+                 ORDER BY operator_system
+                """);
+        q.bind("notifyCode", OperationType.NOTIFY_RESEND.getCode());
+        bindWindow(q, from, to);
+        return q.fetchInto(NotifyResendBySystem.class);
     }
 
     // ==================== SQL 拼接辅助 ====================

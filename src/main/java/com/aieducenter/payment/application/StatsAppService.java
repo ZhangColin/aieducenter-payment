@@ -1,8 +1,14 @@
 package com.aieducenter.payment.application;
 
+import com.aieducenter.payment.application.dto.response.AnomaliesResponse;
+import com.aieducenter.payment.application.dto.response.ByBusinessSystemResponse;
+import com.aieducenter.payment.application.dto.response.ByBusinessSystemResponse.BusinessSystemBreakdown;
+import com.aieducenter.payment.application.dto.response.ByChannelResponse;
+import com.aieducenter.payment.application.dto.response.ByChannelResponse.ChannelBreakdown;
 import com.aieducenter.payment.application.dto.response.GatewayHealthResponse;
 import com.aieducenter.payment.application.dto.response.GatewayHealthResponse.InterfaceHealth;
 import com.aieducenter.payment.application.dto.response.GatewayHealthResponse.ReturnCodeCount;
+import com.aieducenter.payment.application.dto.response.OperationsActivityResponse;
 import com.aieducenter.payment.application.dto.response.OperationsAuditResponse;
 import com.aieducenter.payment.application.dto.response.OperationsAuditResponse.AuditorBreakdown;
 import com.aieducenter.payment.application.dto.response.PaymentOverviewResponse;
@@ -12,7 +18,10 @@ import com.aieducenter.payment.application.dto.response.StatusDistributionRespon
 import com.aieducenter.payment.application.dto.response.StatusDistributionResponse.Backlog;
 import com.aieducenter.payment.application.dto.response.StatusDistributionResponse.PaymentStatusBucket;
 import com.aieducenter.payment.application.dto.response.StatusDistributionResponse.RefundStatusBucket;
+import com.cartisan.core.domain.BaseEnum;
+import com.aieducenter.payment.domain.enums.AccessType;
 import com.aieducenter.payment.domain.enums.OperationType;
+import com.aieducenter.payment.domain.enums.PayMode;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.enums.RefundStatus;
 import com.aieducenter.payment.domain.enums.StatsGranularity;
@@ -20,14 +29,21 @@ import com.aieducenter.payment.domain.error.PaymentMessage;
 import com.aieducenter.payment.infrastructure.query.StatsQueryRepository;
 import com.aieducenter.payment.infrastructure.query.projection.AuditOperationCount;
 import com.aieducenter.payment.infrastructure.query.projection.AuditorAuditCount;
+import com.aieducenter.payment.infrastructure.query.projection.BusinessSystemPaymentRollup;
+import com.aieducenter.payment.infrastructure.query.projection.BusinessSystemRefundRollup;
+import com.aieducenter.payment.infrastructure.query.projection.ChannelPaymentRollup;
+import com.aieducenter.payment.infrastructure.query.projection.FailureCountByType;
 import com.aieducenter.payment.infrastructure.query.projection.GatewayInterfaceRollup;
 import com.aieducenter.payment.infrastructure.query.projection.GatewayReturnCodeCount;
+import com.aieducenter.payment.infrastructure.query.projection.NotifyResendBySystem;
+import com.aieducenter.payment.infrastructure.query.projection.OperatorOperationCount;
 import com.aieducenter.payment.infrastructure.query.projection.PaymentStatusCount;
 import com.aieducenter.payment.infrastructure.query.projection.PaymentTrendBucket;
 import com.aieducenter.payment.infrastructure.query.projection.RefundStatusCount;
 import com.aieducenter.payment.infrastructure.query.projection.RefundTrendBucket;
+import com.aieducenter.payment.infrastructure.query.projection.StuckOrderCount;
 import com.cartisan.core.exception.ApplicationException;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +51,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -45,15 +63,15 @@ import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toMap;
 
 /**
- * 统计应用服务（issue #17，统计一档）。
+ * 统计应用服务（issue #17 统计一档 + issue #18 统计二档）。
  *
  * <p>只读、银行无关。装配逻辑（成功率/通过率计算、除零保护、趋势桶序列补零、净额、
- * returnCode 归组、按审核人透视）是 pitest 主料；仓储 {@link StatsQueryRepository} 由
- * jOOQ 读侧实现，本服务只消费其投影。统计范式详见
- * {@code docs/superpowers/specs/2026-08-11-stats-tier1-design.md}。</p>
+ * returnCode 归组、按审核人/操作员透视、业务系统并集、渠道补零）是 pitest 主料；仓储
+ * {@link StatsQueryRepository} 由 jOOQ 读侧实现，本服务只消费其投影。统计范式详见
+ * {@code docs/superpowers/specs/2026-08-11-stats-tier1-design.md}
+ * 与 {@code docs/superpowers/specs/2026-08-11-stats-tier2-design.md}。</p>
  */
 @Service
-@RequiredArgsConstructor
 public class StatsAppService {
 
     /** 趋势桶数量上限（防御过大的统计区间，超出抛 {@link PaymentMessage#STATS_RANGE_TOO_LARGE}）。 */
@@ -63,6 +81,29 @@ public class StatsAppService {
     private static final int DURATION_SCALE = 2;
 
     private final StatsQueryRepository statsQueryRepository;
+    /** anomalies「长时 PENDING 支付单」阈值（小时），见 {@code payment.stats.anomaly.long-pending-payment-hours}。 */
+    private final long longPendingPaymentHours;
+    /** anomalies「长时 REFUNDING 退款单」阈值（小时），见 {@code payment.stats.anomaly.long-refunding-refund-hours}。 */
+    private final long longRefundingRefundHours;
+    /** anomalies「近期」失败窗口（小时），见 {@code payment.stats.anomaly.failure-window-hours}。 */
+    private final long failureWindowHours;
+
+    /**
+     * 显式构造器注入仓储与 3 个 anomalies 阈值（默认 24/48/1 小时）。
+     *
+     * <p>阈值经构造器注入（而非字段注入）以利缝测试直接传值，避免反射。Spring 自动按类型装配仓储、
+     * 按 {@code @Value} 装配基本类型。</p>
+     */
+    public StatsAppService(
+            StatsQueryRepository statsQueryRepository,
+            @Value("${payment.stats.anomaly.long-pending-payment-hours:24}") long longPendingPaymentHours,
+            @Value("${payment.stats.anomaly.long-refunding-refund-hours:48}") long longRefundingRefundHours,
+            @Value("${payment.stats.anomaly.failure-window-hours:1}") long failureWindowHours) {
+        this.statsQueryRepository = statsQueryRepository;
+        this.longPendingPaymentHours = longPendingPaymentHours;
+        this.longRefundingRefundHours = longRefundingRefundHours;
+        this.failureWindowHours = failureWindowHours;
+    }
 
     /**
      * 支付交易概览：支付/退款摘要 + 净额 + 趋势序列。
@@ -162,6 +203,110 @@ public class StatsAppService {
                 avgDurationMinutes, byAuditor);
     }
 
+    /**
+     * 按业务系统维度统计（issue #18）：payment / refund 双源按 businessSystemName 并集，
+     * 缺失侧补零；refundRate = 退款成功笔数 / 支付成功笔数（跨源，除零保护）。
+     */
+    @Transactional(readOnly = true)
+    public ByBusinessSystemResponse byBusinessSystem(LocalDateTime from, LocalDateTime to) {
+        validateRange(from, to);
+        List<BusinessSystemPaymentRollup> payments = statsQueryRepository.businessSystemPaymentRollup(from, to);
+        List<BusinessSystemRefundRollup> refunds = statsQueryRepository.businessSystemRefundRollup(from, to);
+
+        Map<String, BusinessSystemPaymentRollup> payByName = payments.stream()
+                .collect(toMap(BusinessSystemPaymentRollup::businessSystemName, r -> r, (a, b) -> a, LinkedHashMap::new));
+        Map<String, BusinessSystemRefundRollup> refundByName = refunds.stream()
+                .collect(toMap(BusinessSystemRefundRollup::businessSystemName, r -> r, (a, b) -> a, LinkedHashMap::new));
+
+        // 保序并集：payment 顺序优先，refund-only 的业务系统追加在后
+        Set<String> names = new LinkedHashSet<>(payByName.keySet());
+        names.addAll(refundByName.keySet());
+
+        List<BusinessSystemBreakdown> breakdowns = new ArrayList<>();
+        for (String name : names) {
+            BusinessSystemPaymentRollup p = payByName.get(name);
+            BusinessSystemRefundRollup r = refundByName.get(name);
+            long paidCount = p != null ? p.paidCount() : 0;
+            long refundedCount = r != null ? r.refundedCount() : 0;
+            ByBusinessSystemResponse.Summary payment = new ByBusinessSystemResponse.Summary(
+                    p != null ? p.orderCount() : 0,
+                    p != null ? p.totalAmount() : 0,
+                    paidCount,
+                    p != null ? p.paidAmount() : 0,
+                    rate(paidCount, p != null ? p.orderCount() : 0));
+            ByBusinessSystemResponse.Summary refund = new ByBusinessSystemResponse.Summary(
+                    r != null ? r.orderCount() : 0,
+                    r != null ? r.totalAmount() : 0,
+                    refundedCount,
+                    r != null ? r.refundedAmount() : 0,
+                    rate(refundedCount, r != null ? r.orderCount() : 0));
+            // refundRate 跨源：refundedCount / paidCount
+            BigDecimal refundRate = rate(refundedCount, paidCount);
+            breakdowns.add(new BusinessSystemBreakdown(name, payment, refund, refundRate));
+        }
+        return new ByBusinessSystemResponse(breakdowns);
+    }
+
+    /**
+     * 按渠道维度统计（issue #18）：pay_mode / access_type 两路独立聚合，按枚举顺序补零，
+     * Integer code 映射回枚举名。仅统计对应列非空的支付单。
+     */
+    @Transactional(readOnly = true)
+    public ByChannelResponse byChannel(LocalDateTime from, LocalDateTime to) {
+        validateRange(from, to);
+        List<ChannelPaymentRollup> payModeRollups = statsQueryRepository.payModeRollup(from, to);
+        List<ChannelPaymentRollup> accessTypeRollups = statsQueryRepository.accessTypeRollup(from, to);
+
+        Map<Integer, String> payModeNames = enumNames(PayMode.values());
+        Map<Integer, String> accessTypeNames = enumNames(AccessType.values());
+        List<Integer> payModeCodes = enumCodes(PayMode.values());
+        List<Integer> accessTypeCodes = enumCodes(AccessType.values());
+
+        return new ByChannelResponse(
+                buildChannelBreakdowns(payModeRollups, payModeCodes, payModeNames),
+                buildChannelBreakdowns(accessTypeRollups, accessTypeCodes, accessTypeNames));
+    }
+
+    /**
+     * 异常监控（issue #18）：长时 PENDING 支付单 / 长时 REFUNDING 退款单 / 近期查询回调失败。
+     *
+     * <p>无窗口参数——「当前时间」与「长时」cutoff 均由 SQL 的 {@code NOW()} 计算；阈值（小时）经
+     * 构造器注入并传给仓储。仓储已 {@code COALESCE} 保证滞留计数非 null。</p>
+     */
+    @Transactional(readOnly = true)
+    public AnomaliesResponse anomalies() {
+        StuckOrderCount pending = statsQueryRepository.longPendingPayments(longPendingPaymentHours);
+        StuckOrderCount refunding = statsQueryRepository.longRefundingRefunds(longRefundingRefundHours);
+        List<FailureCountByType> failures = statsQueryRepository.recentFailureCounts(failureWindowHours);
+
+        long totalFailures = 0;
+        List<AnomaliesResponse.FailureCount> byType = new ArrayList<>();
+        for (FailureCountByType f : failures) {
+            totalFailures += f.failureCount();
+            byType.add(new AnomaliesResponse.FailureCount(f.logType(), f.failureCount()));
+        }
+        return new AnomaliesResponse(
+                new AnomaliesResponse.StuckOrders(pending.orderCount(), pending.totalAmount()),
+                new AnomaliesResponse.StuckOrders(refunding.orderCount(), refunding.totalAmount()),
+                new AnomaliesResponse.RecentFailures(totalFailures, byType));
+    }
+
+    /**
+     * 操作活跃度（issue #18）：各操作员的操作类型/笔数分布 + 通知重发次数及来源业务系统。
+     * 数据源 OperationLog（单一）。
+     */
+    @Transactional(readOnly = true)
+    public OperationsActivityResponse operationsActivity(LocalDateTime from, LocalDateTime to) {
+        validateRange(from, to);
+        List<OperatorOperationCount> opCounts = statsQueryRepository.operatorOperationCounts(from, to);
+        List<NotifyResendBySystem> resendCounts = statsQueryRepository.notifyResendBySystem(from, to);
+
+        Map<Integer, String> operationNames = enumNames(OperationType.values());
+        return new OperationsActivityResponse(
+                buildOperatorActivity(opCounts, operationNames),
+                buildNotifyResend(resendCounts));
+    }
+
     // ==================== helpers ====================
 
     private static void validateRange(LocalDateTime from, LocalDateTime to) {
@@ -194,6 +339,72 @@ public class StatsAppService {
             return BigDecimal.ZERO.setScale(RATE_SCALE, RoundingMode.HALF_UP);
         }
         return BigDecimal.valueOf(numerator).divide(BigDecimal.valueOf(denominator), RATE_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 按渠道聚合：rollup 按 code 索引，按 {@code codes}（枚举顺序）补零，code 映射回 {@code names}。
+     */
+    private static List<ChannelBreakdown> buildChannelBreakdowns(List<ChannelPaymentRollup> rollups,
+                                                                 List<Integer> codes, Map<Integer, String> names) {
+        Map<Integer, ChannelPaymentRollup> byCode = rollups.stream()
+                .collect(toMap(ChannelPaymentRollup::channelCode, r -> r, (a, b) -> a));
+        List<ChannelBreakdown> result = new ArrayList<>();
+        for (Integer code : codes) {
+            ChannelPaymentRollup r = byCode.get(code);
+            long count = r != null ? r.orderCount() : 0;
+            long paidCount = r != null ? r.paidCount() : 0;
+            result.add(new ChannelBreakdown(code, names.get(code),
+                    count, r != null ? r.totalAmount() : 0,
+                    paidCount, r != null ? r.paidAmount() : 0,
+                    rate(paidCount, count)));
+        }
+        return result;
+    }
+
+    /** 枚举 code 序列（按 {@code values()} 顺序）。 */
+    private static List<Integer> enumCodes(BaseEnum<?>[] values) {
+        return Arrays.stream(values).map(BaseEnum::getCode).toList();
+    }
+
+    /** 枚举 code→name 映射（保序）。 */
+    private static Map<Integer, String> enumNames(BaseEnum<?>[] values) {
+        return Arrays.stream(values)
+                .collect(toMap(BaseEnum::getCode, BaseEnum::getName, (a, b) -> a, LinkedHashMap::new));
+    }
+
+    /**
+     * 操作员透视：按 {@code operatorId} 归组 operation 行（仓储返回顺序保序，含 null 操作员）。
+     */
+    private static List<OperationsActivityResponse.OperatorActivity> buildOperatorActivity(
+            List<OperatorOperationCount> counts, Map<Integer, String> operationNames) {
+        Map<Long, String> nameById = new HashMap<>();
+        Map<Long, Long> totalById = new HashMap<>();
+        Map<Long, List<OperationsActivityResponse.OperationCount>> opsById = new LinkedHashMap<>();
+        for (OperatorOperationCount c : counts) {
+            nameById.put(c.operatorId(), c.operatorName());
+            totalById.merge(c.operatorId(), c.opCount(), Long::sum);
+            opsById.computeIfAbsent(c.operatorId(), k -> new ArrayList<>())
+                    .add(new OperationsActivityResponse.OperationCount(
+                            c.operation(), operationNames.get(c.operation()), c.opCount()));
+        }
+        List<OperationsActivityResponse.OperatorActivity> result = new ArrayList<>();
+        for (Long id : opsById.keySet()) {
+            result.add(new OperationsActivityResponse.OperatorActivity(
+                    id, nameById.get(id), totalById.get(id), opsById.get(id)));
+        }
+        return result;
+    }
+
+    /** 通知重发汇总：求和总数 + 透传按来源业务系统归组。 */
+    private static OperationsActivityResponse.NotifyResendActivity buildNotifyResend(
+            List<NotifyResendBySystem> counts) {
+        long total = 0;
+        List<OperationsActivityResponse.SystemResendCount> bySystem = new ArrayList<>();
+        for (NotifyResendBySystem c : counts) {
+            total += c.resendCount();
+            bySystem.add(new OperationsActivityResponse.SystemResendCount(c.operatorSystem(), c.resendCount()));
+        }
+        return new OperationsActivityResponse.NotifyResendActivity(total, bySystem);
     }
 
     private static Summary summarizePayment(List<PaymentStatusCount> counts) {

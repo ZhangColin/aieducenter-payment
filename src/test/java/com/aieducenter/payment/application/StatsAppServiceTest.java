@@ -1,12 +1,18 @@
 package com.aieducenter.payment.application;
 
+import com.aieducenter.payment.application.dto.response.AnomaliesResponse;
+import com.aieducenter.payment.application.dto.response.ByBusinessSystemResponse;
+import com.aieducenter.payment.application.dto.response.ByChannelResponse;
 import com.aieducenter.payment.application.dto.response.GatewayHealthResponse;
+import com.aieducenter.payment.application.dto.response.OperationsActivityResponse;
 import com.aieducenter.payment.application.dto.response.GatewayHealthResponse.InterfaceHealth;
 import com.aieducenter.payment.application.dto.response.OperationsAuditResponse;
 import com.aieducenter.payment.application.dto.response.OperationsAuditResponse.AuditorBreakdown;
 import com.aieducenter.payment.application.dto.response.PaymentOverviewResponse;
 import com.aieducenter.payment.application.dto.response.StatusDistributionResponse;
+import com.aieducenter.payment.domain.enums.AccessType;
 import com.aieducenter.payment.domain.enums.OperationType;
+import com.aieducenter.payment.domain.enums.PayMode;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.enums.RefundStatus;
 import com.aieducenter.payment.domain.enums.StatsGranularity;
@@ -14,12 +20,19 @@ import com.aieducenter.payment.domain.error.PaymentMessage;
 import com.aieducenter.payment.infrastructure.query.StatsQueryRepository;
 import com.aieducenter.payment.infrastructure.query.projection.AuditOperationCount;
 import com.aieducenter.payment.infrastructure.query.projection.AuditorAuditCount;
+import com.aieducenter.payment.infrastructure.query.projection.BusinessSystemPaymentRollup;
+import com.aieducenter.payment.infrastructure.query.projection.BusinessSystemRefundRollup;
+import com.aieducenter.payment.infrastructure.query.projection.ChannelPaymentRollup;
+import com.aieducenter.payment.infrastructure.query.projection.FailureCountByType;
 import com.aieducenter.payment.infrastructure.query.projection.GatewayInterfaceRollup;
 import com.aieducenter.payment.infrastructure.query.projection.GatewayReturnCodeCount;
+import com.aieducenter.payment.infrastructure.query.projection.NotifyResendBySystem;
+import com.aieducenter.payment.infrastructure.query.projection.OperatorOperationCount;
 import com.aieducenter.payment.infrastructure.query.projection.PaymentStatusCount;
 import com.aieducenter.payment.infrastructure.query.projection.PaymentTrendBucket;
 import com.aieducenter.payment.infrastructure.query.projection.RefundStatusCount;
 import com.aieducenter.payment.infrastructure.query.projection.RefundTrendBucket;
+import com.aieducenter.payment.infrastructure.query.projection.StuckOrderCount;
 import com.cartisan.core.exception.ApplicationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,7 +68,8 @@ class StatsAppServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StatsAppService(statsQueryRepository);
+        // 阈值取配置默认值（24/48/1 小时），与 application.yml 默认一致
+        service = new StatsAppService(statsQueryRepository, 24, 48, 1);
     }
 
     // ==================== overview ====================
@@ -406,6 +420,310 @@ class StatsAppServiceTest {
     @DisplayName("operationsAudit：from 晚于 to 抛 STATS_INVALID_RANGE")
     void given_fromAfterTo_when_operationsAudit_then_invalidRange() {
         assertThatThrownBy(() -> service.operationsAudit(
+                LocalDateTime.of(2026, 8, 12, 0, 0), LocalDateTime.of(2026, 8, 11, 0, 0)))
+            .isInstanceOf(ApplicationException.class)
+            .hasMessageContaining(PaymentMessage.STATS_INVALID_RANGE.message());
+    }
+
+    // ==================== byBusinessSystem ====================
+
+    @Test
+    @DisplayName("byBusinessSystem：双源并集 + 缺失侧补零 + refundRate（refundedCount/paidCount）")
+    void given_paymentAndRefundRollups_when_byBusinessSystem_then_unionWithZeroFillAndRefundRate() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 11, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 12, 0, 0);
+
+        when(statsQueryRepository.businessSystemPaymentRollup(from, to)).thenReturn(List.of(
+            new BusinessSystemPaymentRollup("edu", 10L, 1000L, 8L, 800L),
+            new BusinessSystemPaymentRollup("shop", 4L, 400L, 4L, 400L)
+        ));
+        when(statsQueryRepository.businessSystemRefundRollup(from, to)).thenReturn(List.of(
+            new BusinessSystemRefundRollup("edu", 2L, 200L, 1L, 100L),
+            new BusinessSystemRefundRollup("vip", 3L, 300L, 3L, 300L)  // refund-only → payment 侧补零
+        ));
+
+        ByBusinessSystemResponse result = service.byBusinessSystem(from, to);
+
+        // 并集 3 个：edu、shop（payment 顺序优先）、vip（refund-only 追加）
+        assertThat(result.businessSystems()).hasSize(3);
+        assertThat(result.businessSystems()).extracting(ByBusinessSystemResponse.BusinessSystemBreakdown::businessSystemName)
+            .containsExactly("edu", "shop", "vip");
+
+        // edu: payment(10,1000,8,800,0.8), refund(2,200,1,100,0.5), refundRate=1/8=0.125
+        ByBusinessSystemResponse.BusinessSystemBreakdown edu = result.businessSystems().get(0);
+        assertThat(edu.payment().count()).isEqualTo(10L);
+        assertThat(edu.payment().amount()).isEqualTo(1000L);
+        assertThat(edu.payment().successCount()).isEqualTo(8L);
+        assertThat(edu.payment().successAmount()).isEqualTo(800L);
+        assertThat(edu.payment().successRate()).isEqualByComparingTo(new BigDecimal("0.8000"));
+        assertThat(edu.refund().count()).isEqualTo(2L);
+        assertThat(edu.refund().amount()).isEqualTo(200L);
+        assertThat(edu.refund().successCount()).isEqualTo(1L);
+        assertThat(edu.refund().successAmount()).isEqualTo(100L);
+        assertThat(edu.refund().successRate()).isEqualByComparingTo(new BigDecimal("0.5000"));
+        assertThat(edu.refundRate()).isEqualByComparingTo(new BigDecimal("0.1250"));  // 1/8
+
+        // shop: refund 侧缺失 → 补零；refundRate = 0/4 = 0
+        ByBusinessSystemResponse.BusinessSystemBreakdown shop = result.businessSystems().get(1);
+        assertThat(shop.refund().count()).isZero();
+        assertThat(shop.refund().successCount()).isZero();
+        assertThat(shop.refundRate()).isEqualByComparingTo(new BigDecimal("0.0000"));
+
+        // vip: payment 侧缺失 → 补零；refundRate = 3/0 → 除零保护 0
+        ByBusinessSystemResponse.BusinessSystemBreakdown vip = result.businessSystems().get(2);
+        assertThat(vip.payment().count()).isZero();
+        assertThat(vip.payment().successCount()).isZero();
+        assertThat(vip.refund().successCount()).isEqualTo(3L);
+        assertThat(vip.refundRate()).isEqualByComparingTo(new BigDecimal("0.0000"));  // 除零保护
+    }
+
+    @Test
+    @DisplayName("byBusinessSystem：空表返回空列表")
+    void given_empty_when_byBusinessSystem_then_emptyList() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 11, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 12, 0, 0);
+
+        when(statsQueryRepository.businessSystemPaymentRollup(from, to)).thenReturn(List.of());
+        when(statsQueryRepository.businessSystemRefundRollup(from, to)).thenReturn(List.of());
+
+        ByBusinessSystemResponse result = service.byBusinessSystem(from, to);
+
+        assertThat(result.businessSystems()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("byBusinessSystem：from 晚于 to 抛 STATS_INVALID_RANGE")
+    void given_fromAfterTo_when_byBusinessSystem_then_invalidRange() {
+        assertThatThrownBy(() -> service.byBusinessSystem(
+                LocalDateTime.of(2026, 8, 12, 0, 0), LocalDateTime.of(2026, 8, 11, 0, 0)))
+            .isInstanceOf(ApplicationException.class)
+            .hasMessageContaining(PaymentMessage.STATS_INVALID_RANGE.message());
+    }
+
+    // ==================== byChannel ====================
+
+    @Test
+    @DisplayName("byChannel：pay_mode/access_type 各自聚合 + 枚举补零 + code→name 映射 + 成功率")
+    void given_payModeAndAccessTypeRollups_when_byChannel_then_zeroFilledWithNamesAndRates() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 11, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 12, 0, 0);
+
+        // pay_mode: 仅 WECHAT(9) 与 ALIPAY(10) 有数据，UNIONPAY(13) 缺失补零
+        when(statsQueryRepository.payModeRollup(from, to)).thenReturn(List.of(
+            new ChannelPaymentRollup(PayMode.WECHAT.getCode(), 10L, 1000L, 8L, 800L),
+            new ChannelPaymentRollup(PayMode.ALIPAY.getCode(), 5L, 500L, 5L, 500L)
+        ));
+        // access_type: 仅 H5(4) 有数据，其余 4 个缺失补零
+        when(statsQueryRepository.accessTypeRollup(from, to)).thenReturn(List.of(
+            new ChannelPaymentRollup(AccessType.H5.getCode(), 4L, 400L, 2L, 200L)
+        ));
+
+        ByChannelResponse result = service.byChannel(from, to);
+
+        // byPayMode: 3 个枚举值（WECHAT/ALIPAY/UNIONPAY），按枚举顺序
+        assertThat(result.byPayMode()).hasSize(3);
+        assertThat(result.byPayMode()).extracting(ByChannelResponse.ChannelBreakdown::channelName)
+            .containsExactly("微信", "支付宝", "云闪付");
+        ByChannelResponse.ChannelBreakdown wechat = result.byPayMode().get(0);
+        assertThat(wechat.channelCode()).isEqualTo(PayMode.WECHAT.getCode());
+        assertThat(wechat.count()).isEqualTo(10L);
+        assertThat(wechat.amount()).isEqualTo(1000L);
+        assertThat(wechat.successCount()).isEqualTo(8L);
+        assertThat(wechat.successAmount()).isEqualTo(800L);
+        assertThat(wechat.successRate()).isEqualByComparingTo(new BigDecimal("0.8000"));  // 8/10
+        ByChannelResponse.ChannelBreakdown unionpay = result.byPayMode().get(2);
+        assertThat(unionpay.count()).isZero();  // 补零
+        assertThat(unionpay.channelName()).isEqualTo("云闪付");
+        assertThat(unionpay.successRate()).isEqualByComparingTo(new BigDecimal("0.0000"));  // 除零保护
+
+        // byAccessType: 5 个枚举值，按枚举顺序，仅 H5 有数据
+        assertThat(result.byAccessType()).hasSize(5);
+        assertThat(result.byAccessType()).extracting(ByChannelResponse.ChannelBreakdown::channelName)
+            .containsExactly("H5", "APP", "微信公众号", "支付宝生活号", "小程序");
+        ByChannelResponse.ChannelBreakdown h5 = result.byAccessType().get(0);
+        assertThat(h5.count()).isEqualTo(4L);
+        assertThat(h5.successRate()).isEqualByComparingTo(new BigDecimal("0.5000"));  // 2/4
+    }
+
+    @Test
+    @DisplayName("byChannel：空表返回全枚举补零（含名称）")
+    void given_empty_when_byChannel_then_allEnumsZeroFilled() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 11, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 12, 0, 0);
+
+        when(statsQueryRepository.payModeRollup(from, to)).thenReturn(List.of());
+        when(statsQueryRepository.accessTypeRollup(from, to)).thenReturn(List.of());
+
+        ByChannelResponse result = service.byChannel(from, to);
+
+        assertThat(result.byPayMode()).hasSize(3);
+        assertThat(result.byPayMode()).allSatisfy(b -> assertThat(b.count()).isZero());
+        assertThat(result.byAccessType()).hasSize(5);
+        assertThat(result.byAccessType()).allSatisfy(b -> assertThat(b.count()).isZero());
+    }
+
+    @Test
+    @DisplayName("byChannel：from 晚于 to 抛 STATS_INVALID_RANGE")
+    void given_fromAfterTo_when_byChannel_then_invalidRange() {
+        assertThatThrownBy(() -> service.byChannel(
+                LocalDateTime.of(2026, 8, 12, 0, 0), LocalDateTime.of(2026, 8, 11, 0, 0)))
+            .isInstanceOf(ApplicationException.class)
+            .hasMessageContaining(PaymentMessage.STATS_INVALID_RANGE.message());
+    }
+
+    // ==================== anomalies ====================
+    // setUp 用默认阈值 24/48/1 小时构造；下列 mock 与 verify 均以此为准，
+    // 验「可配阈值」真的经构造器流入仓储（变异友好）。
+
+    @Test
+    @DisplayName("anomalies：装配长时在途 + 近期失败（totalCount 求和）+ 阈值流入仓储")
+    void given_stuckAndFailures_when_anomalies_then_assembledAndThresholdsFlowedToRepo() {
+        when(statsQueryRepository.longPendingPayments(24L)).thenReturn(new StuckOrderCount(3L, 300L));
+        when(statsQueryRepository.longRefundingRefunds(48L)).thenReturn(new StuckOrderCount(1L, 100L));
+        when(statsQueryRepository.recentFailureCounts(1L)).thenReturn(List.of(
+            new FailureCountByType("PAYMENT_QUERY", 4L),
+            new FailureCountByType("PAYMENT_CALLBACK", 2L)
+        ));
+
+        AnomaliesResponse result = service.anomalies();
+
+        assertThat(result.longPendingPayments().count()).isEqualTo(3L);
+        assertThat(result.longPendingPayments().amount()).isEqualTo(300L);
+        assertThat(result.longRefundingRefunds().count()).isEqualTo(1L);
+        assertThat(result.longRefundingRefunds().amount()).isEqualTo(100L);
+        assertThat(result.recentFailures().totalCount()).isEqualTo(6L);  // 4 + 2
+        assertThat(result.recentFailures().byType()).hasSize(2);
+        assertThat(result.recentFailures().byType()).extracting(AnomaliesResponse.FailureCount::logType)
+            .containsExactly("PAYMENT_QUERY", "PAYMENT_CALLBACK");
+        assertThat(result.recentFailures().byType()).extracting(AnomaliesResponse.FailureCount::failureCount)
+            .containsExactly(4L, 2L);
+
+        // 验「可配阈值」经构造器流入仓储（变异点：阈值字段/默认值）
+        verify(statsQueryRepository).longPendingPayments(24L);
+        verify(statsQueryRepository).longRefundingRefunds(48L);
+        verify(statsQueryRepository).recentFailureCounts(1L);
+    }
+
+    @Test
+    @DisplayName("anomalies：自定义阈值（非默认）也正确流入仓储（验「可配置」AC）")
+    void given_customThresholds_when_anomalies_then_customHoursFlowToRepo() {
+        // 用 2/6/0.5 小时阈值重新构造——验阈值可配、非硬编码
+        StatsAppService customService = new StatsAppService(statsQueryRepository, 2, 6, 1);
+        when(statsQueryRepository.longPendingPayments(2L)).thenReturn(new StuckOrderCount(0L, 0L));
+        when(statsQueryRepository.longRefundingRefunds(6L)).thenReturn(new StuckOrderCount(0L, 0L));
+        when(statsQueryRepository.recentFailureCounts(1L)).thenReturn(List.of());
+
+        customService.anomalies();
+
+        verify(statsQueryRepository).longPendingPayments(2L);
+        verify(statsQueryRepository).longRefundingRefunds(6L);
+    }
+
+    @Test
+    @DisplayName("anomalies：空结果全零（仓储 COALESCE 保证不返回 null）")
+    void given_empty_when_anomalies_then_allZeros() {
+        when(statsQueryRepository.longPendingPayments(24L)).thenReturn(new StuckOrderCount(0L, 0L));
+        when(statsQueryRepository.longRefundingRefunds(48L)).thenReturn(new StuckOrderCount(0L, 0L));
+        when(statsQueryRepository.recentFailureCounts(1L)).thenReturn(List.of());
+
+        AnomaliesResponse result = service.anomalies();
+
+        assertThat(result.longPendingPayments().count()).isZero();
+        assertThat(result.longPendingPayments().amount()).isZero();
+        assertThat(result.longRefundingRefunds().count()).isZero();
+        assertThat(result.recentFailures().totalCount()).isZero();
+        assertThat(result.recentFailures().byType()).isEmpty();
+    }
+
+    // ==================== operationsActivity ====================
+
+    @Test
+    @DisplayName("operationsActivity：操作员透视（code→name）+ NOTIFY_RESEND 按来源系统归组")
+    void given_operatorAndResendCounts_when_operationsActivity_then_pivotedAndGrouped() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 11, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 12, 0, 0);
+
+        when(statsQueryRepository.operatorOperationCounts(from, to)).thenReturn(List.of(
+            new OperatorOperationCount(1L, "Alice", OperationType.AUDIT_APPROVE.getCode(), 4L),
+            new OperatorOperationCount(1L, "Alice", OperationType.NOTIFY_RESEND.getCode(), 2L),
+            new OperatorOperationCount(2L, "Bob", OperationType.AUDIT_REJECT.getCode(), 1L)
+        ));
+        when(statsQueryRepository.notifyResendBySystem(from, to)).thenReturn(List.of(
+            new NotifyResendBySystem("edu", 3L),
+            new NotifyResendBySystem("shop", 1L)
+        ));
+
+        OperationsActivityResponse result = service.operationsActivity(from, to);
+
+        // byOperator：2 个操作员（按仓储返回顺序）
+        assertThat(result.byOperator()).hasSize(2);
+        OperationsActivityResponse.OperatorActivity alice = result.byOperator().get(0);
+        assertThat(alice.operatorId()).isEqualTo(1L);
+        assertThat(alice.operatorName()).isEqualTo("Alice");
+        assertThat(alice.totalCount()).isEqualTo(6L);  // 4 + 2
+        assertThat(alice.operations()).hasSize(2);
+        assertThat(alice.operations()).extracting(OperationsActivityResponse.OperationCount::operationName)
+            .containsExactly("审核通过", "通知重发");  // code→name 映射
+        assertThat(alice.operations()).extracting(OperationsActivityResponse.OperationCount::count)
+            .containsExactly(4L, 2L);
+        OperationsActivityResponse.OperatorActivity bob = result.byOperator().get(1);
+        assertThat(bob.totalCount()).isEqualTo(1L);
+        assertThat(bob.operations()).extracting(OperationsActivityResponse.OperationCount::operationName)
+            .containsExactly("审核拒绝");
+
+        // notifyResend：totalCount=4，byBusinessSystem 2 个
+        assertThat(result.notifyResend().totalCount()).isEqualTo(4L);  // 3 + 1
+        assertThat(result.notifyResend().byBusinessSystem()).hasSize(2);
+        assertThat(result.notifyResend().byBusinessSystem()).extracting(OperationsActivityResponse.SystemResendCount::businessSystem)
+            .containsExactly("edu", "shop");
+        assertThat(result.notifyResend().byBusinessSystem()).extracting(OperationsActivityResponse.SystemResendCount::count)
+            .containsExactly(3L, 1L);
+    }
+
+    @Test
+    @DisplayName("operationsActivity：空表返回空列表与零总数")
+    void given_empty_when_operationsActivity_then_empty() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 11, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 12, 0, 0);
+
+        when(statsQueryRepository.operatorOperationCounts(from, to)).thenReturn(List.of());
+        when(statsQueryRepository.notifyResendBySystem(from, to)).thenReturn(List.of());
+
+        OperationsActivityResponse result = service.operationsActivity(from, to);
+
+        assertThat(result.byOperator()).isEmpty();
+        assertThat(result.notifyResend().totalCount()).isZero();
+        assertThat(result.notifyResend().byBusinessSystem()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("operationsActivity：operatorId 为 null 的系统动作单独归组（保留 null）")
+    void given_nullOperatorId_when_operationsActivity_then_groupedAsNullEntry() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 11, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 12, 0, 0);
+
+        when(statsQueryRepository.operatorOperationCounts(from, to)).thenReturn(List.of(
+            new OperatorOperationCount(null, null, OperationType.NOTIFY_RESEND.getCode(), 3L)
+        ));
+        when(statsQueryRepository.notifyResendBySystem(from, to)).thenReturn(List.of(
+            new NotifyResendBySystem(null, 3L)  // 来源系统亦为 null
+        ));
+
+        OperationsActivityResponse result = service.operationsActivity(from, to);
+
+        assertThat(result.byOperator()).hasSize(1);
+        OperationsActivityResponse.OperatorActivity system = result.byOperator().get(0);
+        assertThat(system.operatorId()).isNull();  // 保留 null，不丢组
+        assertThat(system.operatorName()).isNull();
+        assertThat(system.totalCount()).isEqualTo(3L);
+        assertThat(result.notifyResend().byBusinessSystem()).hasSize(1);
+        assertThat(result.notifyResend().byBusinessSystem().get(0).businessSystem()).isNull();
+    }
+
+    @Test
+    @DisplayName("operationsActivity：from 晚于 to 抛 STATS_INVALID_RANGE")
+    void given_fromAfterTo_when_operationsActivity_then_invalidRange() {
+        assertThatThrownBy(() -> service.operationsActivity(
                 LocalDateTime.of(2026, 8, 12, 0, 0), LocalDateTime.of(2026, 8, 11, 0, 0)))
             .isInstanceOf(ApplicationException.class)
             .hasMessageContaining(PaymentMessage.STATS_INVALID_RANGE.message());
