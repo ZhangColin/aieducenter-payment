@@ -8,6 +8,8 @@ import com.aieducenter.payment.application.mapper.RefundOrderMapper;
 import com.aieducenter.payment.domain.aggregate.PaymentLog;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
+import com.aieducenter.payment.domain.enums.OperationLogTargetType;
+import com.aieducenter.payment.domain.enums.OperationType;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.enums.RefundStatus;
 import com.aieducenter.payment.domain.error.PaymentMessage;
@@ -18,6 +20,7 @@ import com.aieducenter.payment.domain.repository.PaymentLogRepository;
 import com.aieducenter.payment.domain.repository.PaymentOrderRepository;
 import com.aieducenter.payment.domain.repository.RefundOrderRepository;
 import com.aieducenter.payment.infrastructure.BusinessSystemNotifier;
+import com.cartisan.core.context.RequestContext;
 import com.cartisan.core.exception.ApplicationException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -42,6 +45,7 @@ public class RefundAppService {
     private final PaymentGatewayPort paymentGatewayPort;
     private final PaymentLogRepository paymentLogRepository;
     private final BusinessSystemNotifier businessSystemNotifier;
+    private final OperationLogAppService operationLogAppService;
     private final TransactionTemplate transactionTemplate;
 
     /**
@@ -101,6 +105,18 @@ public class RefundAppService {
 
             return refundOrderRepository.save(refundOrder);
         });
+
+        // 审核决策已落库，记录操作日志（操作者来自 command，系统身份来自 RequestContext）
+        operationLogAppService.record(
+            OperationLogTargetType.REFUND,
+            refundOrderNo,
+            command.agreed() ? OperationType.AUDIT_APPROVE : OperationType.AUDIT_REJECT,
+            command.auditorId(),
+            command.auditorName(),
+            RequestContext.getCallerAppName(),
+            "SUCCESS",
+            command.remark()
+        );
 
         if (command.agreed()) {
             // 审核通过后发起退款

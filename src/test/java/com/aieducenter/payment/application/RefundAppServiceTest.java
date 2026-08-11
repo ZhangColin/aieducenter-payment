@@ -6,6 +6,8 @@ import com.aieducenter.payment.application.dto.command.CreateRefundCommand;
 import com.aieducenter.payment.application.dto.response.RefundOrderResponse;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
+import com.aieducenter.payment.domain.enums.OperationLogTargetType;
+import com.aieducenter.payment.domain.enums.OperationType;
 import com.aieducenter.payment.domain.enums.PaymentChannel;
 import com.aieducenter.payment.domain.enums.RefundStatus;
 import com.aieducenter.payment.domain.port.PaymentGatewayPort;
@@ -15,6 +17,7 @@ import com.aieducenter.payment.domain.repository.PaymentLogRepository;
 import com.aieducenter.payment.domain.repository.PaymentOrderRepository;
 import com.aieducenter.payment.domain.repository.RefundOrderRepository;
 import com.aieducenter.payment.infrastructure.BusinessSystemNotifier;
+import com.cartisan.core.context.RequestContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +46,7 @@ class RefundAppServiceTest {
     @Mock private PaymentGatewayPort paymentGatewayPort;
     @Mock private PaymentLogRepository paymentLogRepository;
     @Mock private BusinessSystemNotifier businessSystemNotifier;
+    @Mock private OperationLogAppService operationLogAppService;
     @Mock private TransactionTemplate transactionTemplate;
 
     private RefundAppService service;
@@ -55,6 +59,7 @@ class RefundAppServiceTest {
             paymentGatewayPort,
             paymentLogRepository,
             businessSystemNotifier,
+            operationLogAppService,
             transactionTemplate
         );
     }
@@ -312,6 +317,70 @@ class RefundAppServiceTest {
         verify(paymentGatewayPort, never()).createRefund(any(), anyString());
         // 验证回调了业务系统
         verify(businessSystemNotifier).notify(eq("https://biz.example.com/notify"), any(RefundNotifyRequest.class));
+    }
+
+    @Test
+    @DisplayName("审核通过：落 OperationLog（AUDIT_APPROVE，操作者与系统身份透传）")
+    void auditRefund_approved_recordsAuditApproveOperationLog() {
+        configureTransactionTemplate();
+
+        RefundOrder order = createPendingRefundOrder();
+        when(refundOrderRepository.findByRefundOrderNo("REF001")).thenReturn(Optional.of(order));
+        when(refundOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentOrderRepository.findByPaymentOrderNo("PAY001"))
+            .thenReturn(Optional.of(createPaidPaymentOrder()));
+        when(paymentGatewayPort.createRefund(any(), anyString()))
+            .thenReturn(new CreateRefundResponse(true, "0", "success", "ICBC_REFUND_002", 100L));
+        when(paymentGatewayPort.queryRefund(any(), any(), any(), any()))
+            .thenReturn(new QueryRefundResponse(true, "0", "success", RefundStatus.REFUNDING, 10000L, 10000L, null, null, 50L));
+
+        AuditRefundCommand command = new AuditRefundCommand(1L, "审核员", true, "同意");
+        RequestContext ctx = new RequestContext("req-1", "127.0.0.1", "admin-app", "管理后台", null, null, null, null);
+        RequestContext.run(ctx, () -> {
+            service.auditRefund("REF001", command);
+        });
+
+        ArgumentCaptor<OperationType> operationCaptor = ArgumentCaptor.forClass(OperationType.class);
+        verify(operationLogAppService).record(
+            eq(OperationLogTargetType.REFUND),
+            eq("REF001"),
+            operationCaptor.capture(),
+            eq(1L),
+            eq("审核员"),
+            eq("管理后台"),
+            eq("SUCCESS"),
+            eq("同意")
+        );
+        assertThat(operationCaptor.getValue()).isEqualTo(OperationType.AUDIT_APPROVE);
+    }
+
+    @Test
+    @DisplayName("审核拒绝：落 OperationLog（AUDIT_REJECT，操作者与系统身份透传）")
+    void auditRefund_rejected_recordsAuditRejectOperationLog() {
+        configureTransactionTemplate();
+
+        RefundOrder order = createPendingRefundOrder();
+        when(refundOrderRepository.findByRefundOrderNo("REF001")).thenReturn(Optional.of(order));
+        when(refundOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        AuditRefundCommand command = new AuditRefundCommand(1L, "审核员", false, "不同意");
+        RequestContext ctx = new RequestContext("req-1", "127.0.0.1", "admin-app", "管理后台", null, null, null, null);
+        RequestContext.run(ctx, () -> {
+            service.auditRefund("REF001", command);
+        });
+
+        ArgumentCaptor<OperationType> operationCaptor = ArgumentCaptor.forClass(OperationType.class);
+        verify(operationLogAppService).record(
+            eq(OperationLogTargetType.REFUND),
+            eq("REF001"),
+            operationCaptor.capture(),
+            eq(1L),
+            eq("审核员"),
+            eq("管理后台"),
+            eq("SUCCESS"),
+            eq("不同意")
+        );
+        assertThat(operationCaptor.getValue()).isEqualTo(OperationType.AUDIT_REJECT);
     }
 
     @Test
