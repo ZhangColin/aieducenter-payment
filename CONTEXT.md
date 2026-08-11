@@ -6,7 +6,7 @@
 
 ## 稳定不变式（务必遵守）
 
-1. **payment 是 openapi provider（非 caller）**：校验入站请求的机机签名（HMAC-SHA256），放行可信业务系统的调用；自身**不做任何出站签名调用**，故不持有、也不需要自有的出站签名凭据。
+1. **payment 是 openapi provider（非 caller）**：校验入站请求的机机签名（HMAC-SHA256），放行可信业务系统的调用；**当前**不做任何出站签名调用。`application.yml` 的 `cartisan.openapi.self.*` 为 payment 未来作为 caller（如对业务系统出站通知签名）预留的自身凭据，**当前代码尚未消费**；待该能力落地时，须同步修订本条不变式、并在 app-registry 登记 payment 的 caller 凭据。
 2. **app-registry 是签名凭据的唯一源**：payment 不自建凭据表——入站签名校验所需的 `apiKey` / `apiSecret` / `appName` 全部向 app-registry 查询取得。凭据的登记、颁发、轮换、启停都只在 app-registry 一处发生。
 3. **bootstrap 端点内网-only**：payment 取凭据所依赖的 app-registry bootstrap 端点**按设计不验签**，其安全完全依赖**网络隔离**——生产部署须保证该端点仅在内网可达，明文 `apiSecret` 永不暴露到公网（依据 app-registry ADR-0002）。
 4. **`businessSystemName` 源自调用方 `appName`，无数据迁移**：支付订单与退款订单上的业务系统归属（`businessSystemName`）即验签后由框架注入的调用方显示名（`appName`）。该语义在本次凭据源迁移中保持不变——既不回填、也不重算历史订单。

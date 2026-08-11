@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 18081
 
 spring:
   application:
@@ -20,13 +20,20 @@ spring:
     show-sql: false
 
 # OpenAPI 签名配置
-# payment 是 openapi provider（校验入站签名），非 caller——不做任何出站签名调用，故无 self.* 凭据。
-# 凭据源为 app-registry 的 bootstrap 端点（@NoSignature、内网-only，ADR-0002）：
+# payment 是 openapi provider（校验入站签名）：凭据源为 app-registry 的 bootstrap 端点
+# （@NoSignature、内网-only，ADR-0002）：
 #   GET {APP_REGISTRY_BASE_URL}/api/app-registry/api-keys/{apiKey} → ApiKeyInfo（含明文 apiSecret）
 # 字面 {apiKey} 段为占位符，由框架 RemoteApiKeyProvider 用调用方 X-Api-Key 的值替换。
+#
+# self.* 为 payment 自身的出站签名凭据（预留）：当前代码尚未消费，待 caller 能力
+# （如 BusinessSystemNotifier 出站通知签名）落地后启用；届时须同步修订 CONTEXT.md
+# 不变式 1，并在 app-registry 登记 payment 的 caller 凭据。生产须以环境变量注入真实值，勿硬编码。
 cartisan:
   openapi:
     apikey-service-url: ${APP_REGISTRY_BASE_URL:http://localhost:8088}/api/app-registry/api-keys/{apiKey}
+    self:
+      api-key: ${PAYMENT_API_KEY:payment}
+      api-secret: ${PAYMENT_API_SECRET:dev-secret-change-me}
 
 management:
   endpoints:

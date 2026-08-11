@@ -36,3 +36,10 @@ payment:
 scheduler:
   payment-expiration: "0 */5 * * * *"
   refund-query: "0 */5 * * * *"
+
+cartisan:
+  openapi:
+    apikey-service-url: ${APP_REGISTRY_BASE_URL:http://localhost:8088}/api/app-registry/api-keys/{apiKey}
+    self:
+      api-key: ${PAYMENT_API_KEY:payment}
+      api-secret: ${PAYMENT_API_SECRET:dev-secret-change-me}
