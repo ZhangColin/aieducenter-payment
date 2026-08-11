@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentApiV1Controller {
 
     private final PaymentAppService paymentAppService;
+    private final PaymentOrderQueryAppService paymentOrderQueryAppService;
 
     @PostMapping
     @RequireSignature
@@ -59,8 +60,6 @@ public class PaymentApiV1Controller {
         PrepayOrderResponse response = prepayAppService.createPrepay(command, businessSystemName, clientIp);
         return ApiResponse.ok(response);
     }
-
-    private final PaymentOrderQueryAppService paymentOrderQueryAppService;
 
     @GetMapping
     @RequireSignature
