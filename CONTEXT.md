@@ -10,6 +10,7 @@
 2. **app-registry 是签名凭据的唯一源**：payment 不自建凭据表——入站签名校验所需的 `apiKey` / `apiSecret` / `appName` 全部向 app-registry 查询取得。凭据的登记、颁发、轮换、启停都只在 app-registry 一处发生。
 3. **bootstrap 端点内网-only**：payment 取凭据所依赖的 app-registry bootstrap 端点**按设计不验签**，其安全完全依赖**网络隔离**——生产部署须保证该端点仅在内网可达，明文 `apiSecret` 永不暴露到公网（依据 app-registry ADR-0002）。
 4. **`businessSystemName` 源自调用方 `appName`，无数据迁移**：支付订单与退款订单上的业务系统归属（`businessSystemName`）即验签后由框架注入的调用方显示名（`appName`）。该语义在本次凭据源迁移中保持不变——既不回填、也不重算历史订单。
+5. **对外接口与领域逻辑与具体银行解耦**：银行差异封装在南向端口 `PaymentGatewayPort` 的适配器层（当前唯一实现为工行 ICBC）。服务对外契约、应用编排与领域状态机均**银行无关**；新增银行能力（如关单）须加在端口上，不得在应用层硬编码特定银行。已知缺口：多银行并存时的**通道选择策略**（按商户配置 / 订单渠道 / 创建时路由）尚未定义——当前创建支付直接走唯一网关，待多银行落地时再定。
 
 ## 术语表（Ubiquitous Language）
 
@@ -38,5 +39,21 @@ _Avoid_: 与 `appCode` / `apiKey` 混淆——`callerAppName` 是显示名（可
 **businessSystemName**:
 持久化在支付订单与退款订单上的**业务系统归属**——值即本次调用的 `callerAppName`（亦即调用方的 `appName`）。用于把订单归到发起它的业务系统。
 _Avoid_: 以为它是独立于 app-registry 的另一套业务系统主数据，或以为本次迁移需要回填 / 重算——它只是 `appName` 的落库投影，语义未变。
+
+**PaymentLog（网关交互日志）**:
+本服务与银行网关之间**每次交互**的留痕——记接口、请求/响应原文、返回码、耗时与成败。仅记机器↔机器的网关调用，**不**记人工操作。用途是集成调试、银行侧问题排查、网关健康度统计。
+_Avoid_: 把人工/运营操作塞进 PaymentLog（那是 OperationLog）；把它当作"订单所有事件总账"（它是网关视角，非全生命周期视角）。
+
+**OperationLog（操作日志）**:
+对订单的**行为者发起操作**的留痕——谁（操作者 id/名 + 来源系统）、对哪单、做了什么（审核通过/拒绝、通知重发等）、结果。用途是合规追溯与运营审计。行为者身份由调用方在请求体传入，系统身份取自签名上下文。
+_Avoid_: 与 PaymentLog 混淆或合表——OperationLog 记"人/系统对本服务的操作"，PaymentLog 记"本服务对银行网关的调用"，职责不同（见 ADR-0002）。
+
+**订单生命周期（Order Lifecycle）**:
+单个订单从创建到终态的**完整事件序列**——按时间合并该订单的 PaymentLog 与 OperationLog 后的只读视图。供客诉排查与运营查看"这单经历了什么"。是**读模型**，非聚合。
+_Avoid_: 以为生命周期是单张表——它是两个日志聚合的合并读视图。
+
+**auditType**:
+退款审核类型——`AUTO`（免审：创建时系统自动通过）或 `MANUAL`（人工审核：操作者放行/拒绝）。免审时 `auditorId` 为空、`auditType=AUTO`；人工审核 `auditorId` 非空、`auditType=MANUAL`。
+_Avoid_: 用 `auditorName="SYSTEM"` 之类哨兵值判断"是否人工审核"——应看 `auditType`。
 
 _项目级新术语随讨论沉淀、追加于后。重大决策同步落 `docs/adr/`。_
