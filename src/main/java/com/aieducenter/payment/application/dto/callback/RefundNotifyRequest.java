@@ -1,6 +1,7 @@
 package com.aieducenter.payment.application.dto.callback;
 
 import com.alibaba.fastjson2.annotation.JSONField;
+import com.aieducenter.payment.domain.aggregate.RefundOrder;
 
 /**
  * 退款结果通知请求
@@ -37,7 +38,7 @@ public record RefundNotifyRequest(
     /**
      * 由退款聚合构造通知 payload（首次通知与重发共用同一构造真源）。
      */
-    public static RefundNotifyRequest from(com.aieducenter.payment.domain.aggregate.RefundOrder order) {
+    public static RefundNotifyRequest from(RefundOrder order) {
         return new RefundNotifyRequest(
             order.getRefundOrderNo(),
             order.getBusinessOrderNo(),
