@@ -33,7 +33,11 @@ public enum PaymentMessage implements CodeMessage {
     // ========== 业务限制 (403) ==========
     PAYMENT_ORDER_EXPIRED(403, "PAY_040", "支付订单已过期"),
     PAYMENT_ORDER_FAILED(403, "PAY_041", "支付订单已失败"),
-    REFUND_ALREADY_REFUNDED(403, "PAY_042", "已退款，不能重复退款");
+    REFUND_ALREADY_REFUNDED(403, "PAY_042", "已退款，不能重复退款"),
+
+    // ========== 通知重发校验错误 (400) ==========
+    PAYMENT_ORDER_NOT_TERMINAL(400, "PAY_060", "支付订单未处于终态，无法重发通知"),
+    REFUND_ORDER_NOT_TERMINAL(400, "PAY_061", "退款订单未处于终态，无法重发通知");
 
     private final int httpStatus;
     private final String code;
