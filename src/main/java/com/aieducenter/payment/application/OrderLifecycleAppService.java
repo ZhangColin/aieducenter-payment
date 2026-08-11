@@ -52,6 +52,8 @@ public class OrderLifecycleAppService {
             events.add(orderLifecycleMapper.fromOperationLog(operationLog));
         }
 
+        // createdAt 为毫秒精度；相同 createdAt 时以 id 升序兜底——两源 id 均为 TSID（全局时间序），
+        // 故跨表仍反映亚毫秒级真实创建序，优于「按来源分组的插入序」（gateway 全排在 operation 前）。
         events.sort(
             Comparator.comparing(OrderLifecycleResponse::createdAt)
                 .thenComparing(OrderLifecycleResponse::id)
