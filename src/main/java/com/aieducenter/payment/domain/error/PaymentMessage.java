@@ -37,7 +37,11 @@ public enum PaymentMessage implements CodeMessage {
 
     // ========== 通知重发校验错误 (400) ==========
     PAYMENT_ORDER_NOT_TERMINAL(400, "PAY_060", "支付订单未处于终态，无法重发通知"),
-    REFUND_ORDER_NOT_TERMINAL(400, "PAY_061", "退款订单未处于终态，无法重发通知");
+    REFUND_ORDER_NOT_TERMINAL(400, "PAY_061", "退款订单未处于终态，无法重发通知"),
+
+    // ========== 统计校验错误 (400)（issue #17） ==========
+    STATS_RANGE_TOO_LARGE(400, "PAY_070", "统计区间过大，请缩小时间范围或粒度"),
+    STATS_INVALID_RANGE(400, "PAY_071", "统计时间区间无效（from 须 ≤ to）");
 
     private final int httpStatus;
     private final String code;

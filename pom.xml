@@ -83,6 +83,13 @@
             <artifactId>cartisan-openapi</artifactId>
             <version>0.1.0-SNAPSHOT</version>
         </dependency>
+        <!-- cartisan-data-query：框架读侧（jOOQ + DSLContext），供统计聚合（issue #17）。
+             DSLContext 由 JooqAutoConfiguration 自动装配（PostgreSQL 方言）；跳过 jOOQ codegen，用 plain SQL。 -->
+        <dependency>
+            <groupId>com.cartisan</groupId>
+            <artifactId>cartisan-data-query</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
 
         <!-- Security -->
         <dependency>
@@ -234,6 +241,7 @@
                         issue #13 起追加 PaymentLogQueryAppService（支付网关日志列表查询应用服务缝）。
                         issue #14 起追加 OrderLifecycleAppService（订单生命周期读模型：两源合并排序应用服务缝）。
                         issue #16 起追加 NotificationResendAppService（通知重发应用服务缝）。
+                        issue #17 起追加 StatsAppService（统计一档聚合组装应用服务缝）。
                         控制器（薄委托，行为由 AppService 缝 + SignatureVerificationIntegrationTest 覆盖）、
                         枚举（纯值对象）、MapStruct 生成实现、手写映射层（如 OrderLifecycleMapper）不在变异评分范围。
                     -->
@@ -246,6 +254,7 @@
                         <param>com.aieducenter.payment.application.PaymentLogQueryAppService</param>
                         <param>com.aieducenter.payment.application.OrderLifecycleAppService</param>
                         <param>com.aieducenter.payment.application.NotificationResendAppService</param>
+                        <param>com.aieducenter.payment.application.StatsAppService</param>
                     </targetClasses>
                     <mutators>DEFAULTS</mutators>
                     <mutationThreshold>70</mutationThreshold>
