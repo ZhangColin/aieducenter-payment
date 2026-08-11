@@ -25,3 +25,17 @@ Service 服务，基于 cartisan-boot 框架。
 ## 开发流程
 
 严格按 Superpowers 技能流程执行：brainstorming → writing-plans → TDD → verification
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in the repo's GitHub Issues (uses the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
