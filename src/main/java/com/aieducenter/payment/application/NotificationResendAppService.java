@@ -5,6 +5,7 @@ import com.aieducenter.payment.application.dto.command.ResendNotificationCommand
 import com.aieducenter.payment.application.mapper.PaymentOrderMapper;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
+import com.aieducenter.payment.domain.enums.NotificationDeliveryResult;
 import com.aieducenter.payment.domain.enums.OperationLogTargetType;
 import com.aieducenter.payment.domain.enums.OperationType;
 import com.aieducenter.payment.domain.error.PaymentMessage;
@@ -21,7 +22,8 @@ import org.springframework.stereotype.Service;
  *
  * <p>运营补发业务系统漏收的支付/退款结果通知：仅当订单处于<b>终态</b>时，把当前结果重 POST 到其
  * {@code notifyUrl}（复用 {@link BusinessSystemNotifier}），<b>不改订单状态、不重置时间线</b>（ADR-0001）。
- * 每次重发落 {@code OperationLog(NOTIFY_RESEND)}，含操作者（请求体）与系统身份（签名上下文）。</p>
+ * 每次重发落 {@code OperationLog(NOTIFY_RESEND)}，含操作者（请求体）与系统身份（签名上下文），
+ * {@code result} 据真实投递结果区分 {@code SUCCESS} / {@code DELIVERY_FAILED} / {@code SKIPPED}。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -46,7 +48,8 @@ public class NotificationResendAppService {
             throw new ApplicationException(PaymentMessage.PAYMENT_ORDER_NOT_TERMINAL);
         }
 
-        businessSystemNotifier.notify(order.getNotifyUrl(), PaymentOrderMapper.convert(order));
+        NotificationDeliveryResult delivery =
+            businessSystemNotifier.notify(order.getNotifyUrl(), PaymentOrderMapper.convert(order));
 
         operationLogAppService.record(
             OperationLogTargetType.PAYMENT,
@@ -55,7 +58,7 @@ public class NotificationResendAppService {
             command.operatorId(),
             command.operatorName(),
             RequestContext.getCallerAppName(),
-            "SUCCESS",
+            toResultToken(delivery),
             command.remark()
         );
     }
@@ -74,7 +77,8 @@ public class NotificationResendAppService {
             throw new ApplicationException(PaymentMessage.REFUND_ORDER_NOT_TERMINAL);
         }
 
-        businessSystemNotifier.notify(order.getNotifyUrl(), RefundNotifyRequest.from(order));
+        NotificationDeliveryResult delivery =
+            businessSystemNotifier.notify(order.getNotifyUrl(), RefundNotifyRequest.from(order));
 
         operationLogAppService.record(
             OperationLogTargetType.REFUND,
@@ -83,8 +87,22 @@ public class NotificationResendAppService {
             command.operatorId(),
             command.operatorName(),
             RequestContext.getCallerAppName(),
-            "SUCCESS",
+            toResultToken(delivery),
             command.remark()
         );
+    }
+
+    /**
+     * 把投递结果映射为 OperationLog 的稳定 result token。
+     *
+     * <p>三态区分提升审计可读性：送达成功 / 投递失败 / 未投递（blank notifyUrl）——
+     * 运营下一步动作不同（前者无动作，后者可稍后重发，未投递需补 notifyUrl 配置）。</p>
+     */
+    private static String toResultToken(NotificationDeliveryResult delivery) {
+        return switch (delivery) {
+            case DELIVERED -> "SUCCESS";
+            case FAILED -> "DELIVERY_FAILED";
+            case SKIPPED -> "SKIPPED";
+        };
     }
 }

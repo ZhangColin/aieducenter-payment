@@ -5,6 +5,7 @@ import com.aieducenter.payment.application.dto.command.ResendNotificationCommand
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
+import com.aieducenter.payment.domain.enums.NotificationDeliveryResult;
 import com.aieducenter.payment.domain.enums.OperationLogTargetType;
 import com.aieducenter.payment.domain.enums.OperationType;
 import com.aieducenter.payment.domain.enums.PaymentChannel;
@@ -110,6 +111,8 @@ class NotificationResendAppServiceTest {
     void givenPaidPayment_whenResend_thenNotifiesAndLogsNoStateChange() {
         PaymentOrder order = createPaidPaymentOrder();
         when(paymentOrderRepository.findByPaymentOrderNo("PAY001")).thenReturn(Optional.of(order));
+        when(businessSystemNotifier.notify(anyString(), any(PaymentOrderResponse.class)))
+            .thenReturn(NotificationDeliveryResult.DELIVERED);
 
         RequestContext.run(adminContext(), () -> service.resendPaymentNotification("PAY001", command()));
 
@@ -118,13 +121,45 @@ class NotificationResendAppServiceTest {
         assertThat(payload.getValue()).isNotNull();
         // 不改订单状态（无 save 调用）
         verify(paymentOrderRepository, never()).save(any(PaymentOrder.class));
-        // 落 OperationLog(NOTIFY_RESEND, PAYMENT)，含操作者与系统身份
+        // 落 OperationLog(NOTIFY_RESEND, PAYMENT)，含操作者与系统身份；送达成功记 SUCCESS
         ArgumentCaptor<OperationType> op = ArgumentCaptor.forClass(OperationType.class);
         verify(operationLogAppService).record(
             eq(OperationLogTargetType.PAYMENT), eq("PAY001"), op.capture(),
             eq(7L), eq("运营员"), eq("管理后台"), eq("SUCCESS"), eq("客诉补发")
         );
         assertThat(op.getValue()).isEqualTo(OperationType.NOTIFY_RESEND);
+    }
+
+    @Test
+    @DisplayName("重发支付通知：投递失败（非200/异常）记 DELIVERY_FAILED")
+    void givenDeliveryFailed_whenResend_thenLogsDeliveryFailed() {
+        PaymentOrder order = createPaidPaymentOrder();
+        when(paymentOrderRepository.findByPaymentOrderNo("PAY001")).thenReturn(Optional.of(order));
+        when(businessSystemNotifier.notify(anyString(), any(PaymentOrderResponse.class)))
+            .thenReturn(NotificationDeliveryResult.FAILED);
+
+        RequestContext.run(adminContext(), () -> service.resendPaymentNotification("PAY001", command()));
+
+        verify(operationLogAppService).record(
+            eq(OperationLogTargetType.PAYMENT), eq("PAY001"), eq(OperationType.NOTIFY_RESEND),
+            eq(7L), eq("运营员"), eq("管理后台"), eq("DELIVERY_FAILED"), eq("客诉补发")
+        );
+    }
+
+    @Test
+    @DisplayName("重发支付通知：未投递（blank notifyUrl）记 SKIPPED")
+    void givenSkippedDelivery_whenResend_thenLogsSkipped() {
+        PaymentOrder order = createPaidPaymentOrder();
+        when(paymentOrderRepository.findByPaymentOrderNo("PAY001")).thenReturn(Optional.of(order));
+        when(businessSystemNotifier.notify(anyString(), any(PaymentOrderResponse.class)))
+            .thenReturn(NotificationDeliveryResult.SKIPPED);
+
+        RequestContext.run(adminContext(), () -> service.resendPaymentNotification("PAY001", command()));
+
+        verify(operationLogAppService).record(
+            eq(OperationLogTargetType.PAYMENT), eq("PAY001"), eq(OperationType.NOTIFY_RESEND),
+            eq(7L), eq("运营员"), eq("管理后台"), eq("SKIPPED"), eq("客诉补发")
+        );
     }
 
     @Test
@@ -159,6 +194,8 @@ class NotificationResendAppServiceTest {
     void givenSuccessRefund_whenResend_thenNotifiesAndLogsNoStateChange() {
         RefundOrder order = createSuccessRefundOrder();
         when(refundOrderRepository.findByRefundOrderNo("REF001")).thenReturn(Optional.of(order));
+        when(businessSystemNotifier.notify(anyString(), any(RefundNotifyRequest.class)))
+            .thenReturn(NotificationDeliveryResult.DELIVERED);
 
         RequestContext.run(adminContext(), () -> service.resendRefundNotification("REF001", command()));
 

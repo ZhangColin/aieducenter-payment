@@ -1,6 +1,7 @@
 package com.aieducenter.payment.infrastructure;
 
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
+import com.aieducenter.payment.domain.enums.NotificationDeliveryResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,8 +52,8 @@ class BusinessSystemNotifierTest {
     }
 
     @Test
-    @DisplayName("notifyUrl为空时不发送通知且不抛异常")
-    void notify_withNullUrl_doesNotThrow() {
+    @DisplayName("notifyUrl为空时不发送通知、不抛异常，返回 SKIPPED")
+    void notify_withBlankUrl_returnsSkippedAndDoesNotThrow() {
         PaymentOrderResponse response = new PaymentOrderResponse(
             1001L, "BIZ001", "PAY001", "TestSystem", "课程购买",
             2, "已支付", 10000L, "Python课程", "Python编程课程",
@@ -61,6 +62,8 @@ class BusinessSystemNotifierTest {
         );
 
         assertThatNoException().isThrownBy(() -> notifier.notify(null, response));
-        assertThatNoException().isThrownBy(() -> notifier.notify("", response));
+        assertThat(notifier.notify(null, response)).isEqualTo(NotificationDeliveryResult.SKIPPED);
+        assertThat(notifier.notify("", response)).isEqualTo(NotificationDeliveryResult.SKIPPED);
+        assertThat(notifier.notify("   ", response)).isEqualTo(NotificationDeliveryResult.SKIPPED);
     }
 }

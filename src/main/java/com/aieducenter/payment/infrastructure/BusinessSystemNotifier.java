@@ -2,6 +2,7 @@ package com.aieducenter.payment.infrastructure;
 
 import com.aieducenter.payment.application.dto.callback.RefundNotifyRequest;
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
+import com.aieducenter.payment.domain.enums.NotificationDeliveryResult;
 import com.alibaba.fastjson2.JSON;
 import com.cartisan.core.stereotype.Adapter;
 import com.cartisan.core.stereotype.PortType;
@@ -37,28 +38,34 @@ public class BusinessSystemNotifier {
     }
 
     /**
-     * 通知业务系统（支付结果）
+     * 通知业务系统（支付结果）。
+     *
+     * @return 投递结果（{@link NotificationDeliveryResult}）：blank notifyUrl → {@code SKIPPED}；
+     *         HTTP 200 → {@code DELIVERED}；非 200 / 异常 → {@code FAILED}。best-effort，永不抛异常。
      */
-    public void notify(String notifyUrl, PaymentOrderResponse response) {
+    public NotificationDeliveryResult notify(String notifyUrl, PaymentOrderResponse response) {
         if (notifyUrl == null || notifyUrl.isBlank()) {
             log.debug("notifyUrl is empty, skip notification. orderId={}", response.paymentOrderNo());
-            return;
+            return NotificationDeliveryResult.SKIPPED;
         }
-        sendNotification(notifyUrl, JSON.toJSONString(response), response.paymentOrderNo());
+        return sendNotification(notifyUrl, JSON.toJSONString(response), response.paymentOrderNo());
     }
 
     /**
-     * 通知业务系统（退款结果）
+     * 通知业务系统（退款结果）。
+     *
+     * @return 投递结果（{@link NotificationDeliveryResult}）：blank notifyUrl → {@code SKIPPED}；
+     *         HTTP 200 → {@code DELIVERED}；非 200 / 异常 → {@code FAILED}。best-effort，永不抛异常。
      */
-    public void notify(String notifyUrl, RefundNotifyRequest request) {
+    public NotificationDeliveryResult notify(String notifyUrl, RefundNotifyRequest request) {
         if (notifyUrl == null || notifyUrl.isBlank()) {
             log.debug("notifyUrl is empty, skip refund notification. refundOrderNo={}", request.refundOrderNo());
-            return;
+            return NotificationDeliveryResult.SKIPPED;
         }
-        sendNotification(notifyUrl, JSON.toJSONString(request), request.refundOrderNo());
+        return sendNotification(notifyUrl, JSON.toJSONString(request), request.refundOrderNo());
     }
 
-    private void sendNotification(String notifyUrl, String body, String orderId) {
+    private NotificationDeliveryResult sendNotification(String notifyUrl, String body, String orderId) {
         try {
             HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(notifyUrl))
@@ -73,13 +80,15 @@ public class BusinessSystemNotifier {
 
             if (response.statusCode() == 200) {
                 log.info("Business system notification succeeded: orderId={}, status={}", orderId, response.statusCode());
-            } else {
-                log.warn("Business system notification returned non-200: orderId={}, status={}, body={}",
-                    orderId, response.statusCode(), response.body());
+                return NotificationDeliveryResult.DELIVERED;
             }
+            log.warn("Business system notification returned non-200: orderId={}, status={}, body={}",
+                orderId, response.statusCode(), response.body());
+            return NotificationDeliveryResult.FAILED;
         } catch (Exception e) {
             log.warn("Business system notification failed: orderId={}, url={}, error={}",
                 orderId, notifyUrl, e.getMessage());
+            return NotificationDeliveryResult.FAILED;
         }
     }
 }
