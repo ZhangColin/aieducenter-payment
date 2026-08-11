@@ -436,3 +436,10 @@ git commit -m "chore(build): pitest 覆盖 RefundOrder（auditType/autoAudit 变
 **2. Placeholder scan：** 无 TBD / "类似 Task N"；每步含完整代码或精确命令。
 
 **3. Type consistency：** `AuditType` code 值（`AUTO=1`/`MANUAL=2`）在枚举定义、Task 1 回填 SQL（`1`/`2`）、Task 3 测试断言（`1`/`2`、"免审"）三处一致；`audit_type` 列名在 V1（待加列的表 `pay_refund_orders`）、V8 迁移、`RefundOrder` `@Column(name="audit_type")` 一致；`audit()` 签名 `(Long, String, Boolean, String)` 不变→既有 8 处调用点零改动，仅 `createRefund` 第 77 行改为 `autoAudit()`。
+
+---
+
+## 实施修订（TDD 发现，已落实）
+
+**`audit_type` 列改为可空（取消「回填后 NOT NULL」）。** 上文「关键设计决策」表中「回填后 `NOT NULL`」与 Task 1 代码片段中的 `ALTER TABLE ... SET NOT NULL` **未采用**。原因：`needAudit=true` 创建的退款在 PENDING 态尚未发生审核动作，`auditType` 为空（与既有可空审核字段 `auditor_id`/`auditor_name`/`audit_agreed`/`audited_at`/`audit_remark` 一致）；若强制 NOT NULL，首条 PENDING 订单 INSERT 即违反约束。TDD（`createRefund_needAuditTrue_staysPending` 触发 NPE）暴露此问题。最终实现：列可空，`@Column(name="audit_type")`（无 `nullable=false`），`toResponse` 空安全（`getAuditType() != null ? ...getCode() : null`），响应 PENDING 订单 `auditType/auditTypeName` 为 null。
+
