@@ -4,6 +4,7 @@ import com.aieducenter.payment.application.dto.callback.RefundNotifyRequest;
 import com.aieducenter.payment.application.dto.command.AuditRefundCommand;
 import com.aieducenter.payment.application.dto.command.CreateRefundCommand;
 import com.aieducenter.payment.application.dto.response.RefundOrderResponse;
+import com.aieducenter.payment.application.mapper.RefundOrderMapper;
 import com.aieducenter.payment.domain.aggregate.PaymentLog;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
@@ -79,7 +80,7 @@ public class RefundAppService {
             executeRefundAfterApproval(saved);
         }
 
-        return toResponse(saved);
+        return RefundOrderMapper.convert(saved);
     }
 
     /**
@@ -109,7 +110,7 @@ public class RefundAppService {
             notifyIfTerminal(saved);
         }
 
-        return toResponse(saved);
+        return RefundOrderMapper.convert(saved);
     }
 
     /**
@@ -139,7 +140,7 @@ public class RefundAppService {
             }
         }
 
-        return toResponse(refundOrder);
+        return RefundOrderMapper.convert(refundOrder);
     }
 
     /**
@@ -298,32 +299,5 @@ public class RefundAppService {
             );
             businessSystemNotifier.notify(refundOrder.getNotifyUrl(), request);
         }
-    }
-
-    private RefundOrderResponse toResponse(RefundOrder order) {
-        return new RefundOrderResponse(
-            order.getId(),
-            order.getBusinessOrderNo(),
-            order.getRefundOrderNo(),
-            order.getPaymentOrderNo(),
-            order.getBusinessSystemName(),
-            order.getBusinessName(),
-            order.getStatus().getCode(),
-            order.getStatus().getName(),
-            order.getRefundAmount(),
-            order.getRefundableAmount(),
-            order.getReason(),
-            order.getAuditorName(),
-            order.getAuditAgreed(),
-            order.getAuditRemark(),
-            order.getAuditType() != null ? order.getAuditType().getCode() : null,
-            order.getAuditType() != null ? order.getAuditType().getName() : null,
-            order.getCreatedAt(),
-            order.getApprovedAt(),
-            order.getRefundedAt(),
-            order.getFailedAt(),
-            order.getBankRefundNo(),
-            order.getNotifyUrl()
-        );
     }
 }
