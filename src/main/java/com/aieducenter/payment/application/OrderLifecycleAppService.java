@@ -43,7 +43,8 @@ public class OrderLifecycleAppService {
         List<PaymentLog> paymentLogs = paymentLogRepository.findByPaymentOrderNoOrderByCreatedAtDesc(orderNo);
         List<OperationLog> operationLogs = operationLogRepository.findByTargetNoOrderByCreatedAtDesc(orderNo);
 
-        List<OrderLifecycleResponse> events = new ArrayList<>(paymentLogs.size() + operationLogs.size());
+        // 不预分配容量：单订单事件有界且小，预分配 size()+size() 仅引来 pitest「+→-」良性假阳性（容量提示，ArrayList 自适应扩容）。
+        List<OrderLifecycleResponse> events = new ArrayList<>();
         for (PaymentLog paymentLog : paymentLogs) {
             events.add(orderLifecycleMapper.fromPaymentLog(paymentLog));
         }
