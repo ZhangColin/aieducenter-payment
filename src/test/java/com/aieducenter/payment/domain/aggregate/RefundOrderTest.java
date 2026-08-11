@@ -1,6 +1,7 @@
 package com.aieducenter.payment.domain.aggregate;
 
 
+import com.aieducenter.payment.domain.enums.AuditType;
 import com.aieducenter.payment.domain.enums.RefundStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,7 @@ class RefundOrderTest {
         assertThat(order.getAuditedAt()).isNotNull();
         assertThat(order.getApprovedAt()).isNotNull();
         assertThat(order.getAuditRemark()).isEqualTo("同意退款");
+        assertThat(order.getAuditType()).isEqualTo(AuditType.MANUAL);
     }
 
     @Test
@@ -83,6 +85,46 @@ class RefundOrderTest {
         assertThat(order.getAuditAgreed()).isFalse();
         assertThat(order.getAuditedAt()).isNotNull();
         assertThat(order.getApprovedAt()).isNull(); // 拒绝时没有批准时间
+        assertThat(order.getAuditType()).isEqualTo(AuditType.MANUAL);
+    }
+
+    @Test
+    @DisplayName("给定待审核退款，免审自动通过时应该置 auditType=AUTO 且无审核者")
+    void given_pendingRefund_when_autoAudit_then_auditTypeAutoAndNoAuditor() {
+        // Given
+        RefundOrder order = new RefundOrder(
+            "ORDER001", "PAY001", "TestSystem",
+            "课程购买", 10000L, 10000L, "Reason", null, null
+        );
+
+        // When
+        order.autoAudit();
+
+        // Then
+        assertThat(order.getAuditType()).isEqualTo(AuditType.AUTO);
+        assertThat(order.getStatus()).isEqualTo(RefundStatus.APPROVED);
+        assertThat(order.isApproved()).isTrue();
+        assertThat(order.getAuditorId()).isNull();
+        assertThat(order.getAuditorName()).isNull();
+        assertThat(order.getAuditAgreed()).isTrue();
+        assertThat(order.getAuditedAt()).isNotNull();
+        assertThat(order.getApprovedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("给定非待审核退款（已审核），免审自动通过时应该抛出异常")
+    void given_auditedRefund_when_autoAuditAgain_then_throwsException() {
+        // Given
+        RefundOrder order = new RefundOrder(
+            "ORDER001", "PAY001", "TestSystem",
+            "课程购买", 10000L, 10000L, "Reason", null, null
+        );
+        order.audit(123L, "张三", true, "同意");
+
+        // When & Then
+        assertThatThrownBy(() -> order.autoAudit())
+            .isInstanceOf(com.cartisan.core.exception.DomainException.class)
+            .hasMessageContaining("退款订单不是待审核状态");
     }
 
     @Test

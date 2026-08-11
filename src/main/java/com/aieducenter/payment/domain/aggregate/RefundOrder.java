@@ -1,6 +1,7 @@
 package com.aieducenter.payment.domain.aggregate;
 
 import cn.hutool.core.util.StrUtil;
+import com.aieducenter.payment.domain.enums.AuditType;
 import com.aieducenter.payment.domain.enums.RefundStatus;
 import com.aieducenter.payment.domain.error.PaymentMessage;
 import com.cartisan.core.domain.AggregateRoot;
@@ -60,6 +61,10 @@ public class RefundOrder extends AuditableSoftDeletable implements AggregateRoot
     private String reason;
 
     // Audit information
+    @Getter
+    @Column(name = "audit_type")
+    private AuditType auditType;
+
     @Getter
     @Column(name = "auditor_id")
     private Long auditorId;
@@ -164,6 +169,7 @@ public class RefundOrder extends AuditableSoftDeletable implements AggregateRoot
         Assertions.require(this.status == RefundStatus.PENDING,
             PaymentMessage.REFUND_ORDER_NOT_PENDING);
 
+        this.auditType = AuditType.MANUAL;
         this.auditorId = auditorId;
         this.auditorName = auditorName;
         this.auditAgreed = agreed;
@@ -178,6 +184,23 @@ public class RefundOrder extends AuditableSoftDeletable implements AggregateRoot
             // 审核拒绝
             this.status = RefundStatus.REJECTED;
         }
+    }
+
+    /**
+     * 免审自动通过（创建退款时 needAudit=false 触发）。
+     *
+     * <p>置 {@code auditType=AUTO}，不记录审核者（{@code auditorId/Name} 保持空），
+     * 直接进入 APPROVED。判断「是否免审」应看 {@link #getAuditType()}，而非审核者哨兵值。</p>
+     */
+    public void autoAudit() {
+        Assertions.require(this.status == RefundStatus.PENDING,
+            PaymentMessage.REFUND_ORDER_NOT_PENDING);
+
+        this.auditType = AuditType.AUTO;
+        this.auditAgreed = true;
+        this.auditedAt = LocalDateTime.now();
+        this.status = RefundStatus.APPROVED;
+        this.approvedAt = LocalDateTime.now();
     }
 
     /**
