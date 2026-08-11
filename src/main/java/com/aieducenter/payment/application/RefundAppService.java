@@ -74,7 +74,7 @@ public class RefundAppService {
 
         // 4. 免审：自动审核通过并发起退款
         if (!command.isNeedAudit()) {
-            saved.audit(null, "SYSTEM", true, "免审自动通过");
+            saved.autoAudit();
             saved = refundOrderRepository.save(saved);
             executeRefundAfterApproval(saved);
         }
@@ -316,6 +316,8 @@ public class RefundAppService {
             order.getAuditorName(),
             order.getAuditAgreed(),
             order.getAuditRemark(),
+            order.getAuditType() != null ? order.getAuditType().getCode() : null,
+            order.getAuditType() != null ? order.getAuditType().getName() : null,
             order.getCreatedAt(),
             order.getApprovedAt(),
             order.getRefundedAt(),

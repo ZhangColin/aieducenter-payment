@@ -160,6 +160,9 @@ class RefundAppServiceTest {
 
         // 验证状态为退款成功（说明自动审核通过了）
         assertThat(response.status()).isEqualTo(5); // SUCCESS
+        // 验证免审路径 auditType=AUTO（1）
+        assertThat(response.auditType()).isEqualTo(1);
+        assertThat(response.auditTypeName()).isEqualTo("免审");
         // 验证回调了业务系统
         verify(businessSystemNotifier).notify(eq("https://biz.example.com/refund-notify"), any(RefundNotifyRequest.class));
     }
@@ -202,6 +205,8 @@ class RefundAppServiceTest {
         RefundOrderResponse response = service.auditRefund("REF001", command);
 
         assertThat(response.status()).isEqualTo(4);
+        // 人工审核路径 auditType=MANUAL（2）
+        assertThat(response.auditType()).isEqualTo(2);
         // 不回调（REFUNDING 不是终态）
         verify(businessSystemNotifier, never()).notify(anyString(), any(RefundNotifyRequest.class));
     }

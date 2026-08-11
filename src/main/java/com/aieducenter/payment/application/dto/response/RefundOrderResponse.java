@@ -20,6 +20,8 @@ public record RefundOrderResponse(
     String auditorName,
     Boolean auditAgreed,
     String auditRemark,
+    Integer auditType,
+    String auditTypeName,
     LocalDateTime createdAt,
     LocalDateTime approvedAt,
     LocalDateTime refundedAt,
