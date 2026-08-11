@@ -1,10 +1,12 @@
 package com.aieducenter.payment.endpoints.api.v1;
 
+import com.aieducenter.payment.application.NotificationResendAppService;
 import com.aieducenter.payment.application.PaymentAppService;
 import com.aieducenter.payment.application.PaymentOrderQueryAppService;
 import com.aieducenter.payment.application.PrepayAppService;
 import com.aieducenter.payment.application.dto.command.CreatePaymentCommand;
 import com.aieducenter.payment.application.dto.command.CreatePrepayCommand;
+import com.aieducenter.payment.application.dto.command.ResendNotificationCommand;
 import com.aieducenter.payment.application.dto.query.PaymentOrderQuery;
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
 import com.aieducenter.payment.application.dto.response.PrepayOrderResponse;
@@ -32,6 +34,7 @@ public class PaymentApiV1Controller {
 
     private final PaymentAppService paymentAppService;
     private final PaymentOrderQueryAppService paymentOrderQueryAppService;
+    private final NotificationResendAppService notificationResendAppService;
 
     @PostMapping
     @RequireSignature
@@ -99,6 +102,17 @@ public class PaymentApiV1Controller {
     ) {
         PaymentOrderResponse response = paymentAppService.cancelPayment(paymentOrderNo);
         return ApiResponse.ok(response);
+    }
+
+    @PostMapping("/{paymentOrderNo}/notifications/resend")
+    @RequireSignature
+    @Operation(summary = "重发支付结果通知")
+    public ApiResponse<Void> resendPaymentNotification(
+            @PathVariable String paymentOrderNo,
+            @Valid @RequestBody ResendNotificationCommand command
+    ) {
+        notificationResendAppService.resendPaymentNotification(paymentOrderNo, command);
+        return ApiResponse.ok();
     }
 
 }

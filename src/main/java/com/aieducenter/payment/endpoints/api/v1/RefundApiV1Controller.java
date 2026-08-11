@@ -1,9 +1,11 @@
 package com.aieducenter.payment.endpoints.api.v1;
 
+import com.aieducenter.payment.application.NotificationResendAppService;
 import com.aieducenter.payment.application.RefundAppService;
 import com.aieducenter.payment.application.RefundOrderQueryAppService;
 import com.aieducenter.payment.application.dto.command.AuditRefundCommand;
 import com.aieducenter.payment.application.dto.command.CreateRefundCommand;
+import com.aieducenter.payment.application.dto.command.ResendNotificationCommand;
 import com.aieducenter.payment.application.dto.query.RefundOrderQuery;
 import com.aieducenter.payment.application.dto.response.RefundOrderResponse;
 import com.cartisan.core.context.RequestContext;
@@ -29,6 +31,7 @@ public class RefundApiV1Controller {
 
     private final RefundAppService refundAppService;
     private final RefundOrderQueryAppService refundOrderQueryAppService;
+    private final NotificationResendAppService notificationResendAppService;
 
     @PostMapping
     @RequireSignature
@@ -51,6 +54,17 @@ public class RefundApiV1Controller {
     ) {
         RefundOrderResponse response = refundAppService.auditRefund(refundOrderNo, command);
         return ApiResponse.ok(response);
+    }
+
+    @PostMapping("/{refundOrderNo}/notifications/resend")
+    @RequireSignature
+    @Operation(summary = "重发退款结果通知")
+    public ApiResponse<Void> resendRefundNotification(
+            @PathVariable String refundOrderNo,
+            @Valid @RequestBody ResendNotificationCommand command
+    ) {
+        notificationResendAppService.resendRefundNotification(refundOrderNo, command);
+        return ApiResponse.ok();
     }
 
     @GetMapping
