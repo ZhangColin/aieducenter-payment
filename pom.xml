@@ -233,6 +233,7 @@
                         issue #12 起追加 RefundOrderQueryAppService（退款列表查询应用服务缝）。
                         issue #13 起追加 PaymentLogQueryAppService（支付网关日志列表查询应用服务缝）。
                         issue #14 起追加 OrderLifecycleAppService（订单生命周期读模型：两源合并排序应用服务缝）。
+                        issue #16 起追加 NotificationResendAppService（通知重发应用服务缝）。
                         控制器（薄委托，行为由 AppService 缝 + SignatureVerificationIntegrationTest 覆盖）、
                         枚举（纯值对象）、MapStruct 生成实现、手写映射层（如 OrderLifecycleMapper）不在变异评分范围。
                     -->
@@ -244,6 +245,7 @@
                         <param>com.aieducenter.payment.application.RefundOrderQueryAppService</param>
                         <param>com.aieducenter.payment.application.PaymentLogQueryAppService</param>
                         <param>com.aieducenter.payment.application.OrderLifecycleAppService</param>
+                        <param>com.aieducenter.payment.application.NotificationResendAppService</param>
                     </targetClasses>
                     <mutators>DEFAULTS</mutators>
                     <mutationThreshold>70</mutationThreshold>
