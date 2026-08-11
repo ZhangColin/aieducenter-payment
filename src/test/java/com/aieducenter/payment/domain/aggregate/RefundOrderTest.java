@@ -211,6 +211,30 @@ class RefundOrderTest {
     }
 
     @Test
+    @DisplayName("给定业务订单号为空白，创建时应该抛出异常")
+    void given_blankBusinessOrderNo_when_create_then_throwsException() {
+        // When & Then
+        assertThatThrownBy(() -> new RefundOrder(
+            "  ", "PAY001", "TestSystem",
+            "课程购买", 10000L, 10000L, "Reason", null, null
+        ))
+            .isInstanceOf(com.cartisan.core.exception.DomainException.class)
+            .hasMessageContaining("金额格式不正确");
+    }
+
+    @Test
+    @DisplayName("给定退款金额非正，创建时应该抛出异常")
+    void given_nonPositiveRefundAmount_when_create_then_throwsException() {
+        // When & Then
+        assertThatThrownBy(() -> new RefundOrder(
+            "ORDER001", "PAY001", "TestSystem",
+            "课程购买", 0L, 10000L, "Reason", null, null
+        ))
+            .isInstanceOf(com.cartisan.core.exception.DomainException.class)
+            .hasMessageContaining("金额格式不正确");
+    }
+
+    @Test
     @DisplayName("给定待审核退款，二次审核时应该抛出异常")
     void given_auditedRefund_when_auditAgain_then_throwsException() {
         // Given
