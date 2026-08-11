@@ -22,9 +22,6 @@ Service 服务，基于 cartisan-boot 框架。
 - 打包：`mvn package -DskipTests`
 - 变异测试：`mvn org.pitest:pitest-maven:mutationCoverage`
 
-## 开发流程
-
-严格按 Superpowers 技能流程执行：brainstorming → writing-plans → TDD → verification
 
 ## Agent skills
 
