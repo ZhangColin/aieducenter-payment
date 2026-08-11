@@ -1,17 +1,22 @@
 package com.aieducenter.payment.endpoints.api.v1;
 
 import com.aieducenter.payment.application.RefundAppService;
+import com.aieducenter.payment.application.RefundOrderQueryAppService;
 import com.aieducenter.payment.application.dto.command.AuditRefundCommand;
 import com.aieducenter.payment.application.dto.command.CreateRefundCommand;
+import com.aieducenter.payment.application.dto.query.RefundOrderQuery;
 import com.aieducenter.payment.application.dto.response.RefundOrderResponse;
 import com.cartisan.core.context.RequestContext;
 import com.cartisan.openapi.annotation.RequireSignature;
 import com.cartisan.web.response.ApiResponse;
+import com.cartisan.web.response.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 public class RefundApiV1Controller {
 
     private final RefundAppService refundAppService;
+    private final RefundOrderQueryAppService refundOrderQueryAppService;
 
     @PostMapping
     @RequireSignature
@@ -45,6 +51,16 @@ public class RefundApiV1Controller {
     ) {
         RefundOrderResponse response = refundAppService.auditRefund(refundOrderNo, command);
         return ApiResponse.ok(response);
+    }
+
+    @GetMapping
+    @RequireSignature
+    @Operation(summary = "分页查询退款订单")
+    public ApiResponse<PageResponse<RefundOrderResponse>> list(
+            RefundOrderQuery query,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        return ApiResponse.ok(refundOrderQueryAppService.list(query, pageable));
     }
 
     @GetMapping("/{refundOrderNo}")
