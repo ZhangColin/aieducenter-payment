@@ -229,6 +229,7 @@
                         ICBC 适配器等整体变异分仅 ~31%（既有技术债，另案跟踪），全量纳入会拖垮阈值。
                         故本期（issue #9）先精确覆盖新增且可测的 OperationLog 代码；后续提升整体覆盖后再放宽。
                         issue #10 起追加 PaymentOrderQueryAppService（同属可测的查询应用服务缝）。
+                        issue #11 起追加 RefundOrder（auditType/autoAudit 状态迁移，领域缝变异）。
                         控制器（薄委托，行为由 AppService 缝 + SignatureVerificationIntegrationTest 覆盖）、
                         枚举（纯值对象）、MapStruct 生成实现不在变异评分范围。
                     -->
@@ -236,6 +237,7 @@
                         <param>com.aieducenter.payment.domain.aggregate.OperationLog</param>
                         <param>com.aieducenter.payment.application.OperationLogAppService</param>
                         <param>com.aieducenter.payment.application.PaymentOrderQueryAppService</param>
+                        <param>com.aieducenter.payment.domain.aggregate.RefundOrder</param>
                     </targetClasses>
                     <mutators>DEFAULTS</mutators>
                     <mutationThreshold>70</mutationThreshold>
