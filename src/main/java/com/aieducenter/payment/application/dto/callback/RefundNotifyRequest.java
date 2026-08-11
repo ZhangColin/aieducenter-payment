@@ -32,4 +32,22 @@ public record RefundNotifyRequest(
 
     @JSONField(name = "attach")
     String attach
-) {}
+) {
+
+    /**
+     * 由退款聚合构造通知 payload（首次通知与重发共用同一构造真源）。
+     */
+    public static RefundNotifyRequest from(com.aieducenter.payment.domain.aggregate.RefundOrder order) {
+        return new RefundNotifyRequest(
+            order.getRefundOrderNo(),
+            order.getBusinessOrderNo(),
+            order.getPaymentOrderNo(),
+            order.getStatus().getCode(),
+            order.getStatus().getName(),
+            order.getRefundAmount(),
+            order.getBankRefundNo(),
+            order.getRefundedAt() != null ? order.getRefundedAt().toString() : null,
+            order.getAttach()
+        );
+    }
+}

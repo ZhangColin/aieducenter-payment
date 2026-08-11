@@ -302,18 +302,7 @@ public class RefundAppService {
 
     private void notifyIfTerminal(RefundOrder refundOrder) {
         if (refundOrder.getStatus().isTerminal()) {
-            RefundNotifyRequest request = new RefundNotifyRequest(
-                refundOrder.getRefundOrderNo(),
-                refundOrder.getBusinessOrderNo(),
-                refundOrder.getPaymentOrderNo(),
-                refundOrder.getStatus().getCode(),
-                refundOrder.getStatus().getName(),
-                refundOrder.getRefundAmount(),
-                refundOrder.getBankRefundNo(),
-                refundOrder.getRefundedAt() != null ? refundOrder.getRefundedAt().toString() : null,
-                refundOrder.getAttach()
-            );
-            businessSystemNotifier.notify(refundOrder.getNotifyUrl(), request);
+            businessSystemNotifier.notify(refundOrder.getNotifyUrl(), RefundNotifyRequest.from(refundOrder));
         }
     }
 }
