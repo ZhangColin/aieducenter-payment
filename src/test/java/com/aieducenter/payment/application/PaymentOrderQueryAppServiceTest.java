@@ -4,6 +4,9 @@ import com.aieducenter.payment.application.dto.query.PaymentOrderQuery;
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
 import com.aieducenter.payment.application.mapper.PaymentOrderMapper;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
+import com.aieducenter.payment.domain.enums.AccessType;
+import com.aieducenter.payment.domain.enums.PayMode;
+import com.aieducenter.payment.domain.enums.PaymentChannel;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.repository.PaymentOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,7 +77,10 @@ class PaymentOrderQueryAppServiceTest {
         PaymentOrderResponse responseDto = new PaymentOrderResponse(
             1L, "BIZ001", "PAY20260811", "course-system", "课程购买",
             PaymentStatus.PAID.getCode(), PaymentStatus.PAID.getName(),
-            10000L, "Python 课程", "描述", "工商银行",
+            PayMode.WECHAT.getCode(), PayMode.WECHAT.getName(),
+            AccessType.H5.getCode(), AccessType.H5.getName(),
+            10000L, "Python 课程", "描述",
+            PaymentChannel.ICBC.getCode(), "工商银行",
             null, "127.0.0.1", LocalDateTime.now(), null, LocalDateTime.now(),
             "ICBC_ORDER_001", "THIRD_001"
         );
@@ -86,6 +92,10 @@ class PaymentOrderQueryAppServiceTest {
         assertThat(result.total()).isEqualTo(1L);
         assertThat(result.page()).isEqualTo(1);          // 0-based → 1-based（+1 变异点）
         assertThat(result.size()).isEqualTo(20);
+        assertThat(responseDto.payMode()).isEqualTo(PayMode.WECHAT.getCode());
+        assertThat(responseDto.payModeName()).isEqualTo("微信");
+        assertThat(responseDto.accessTypeName()).isEqualTo("H5");
+        assertThat(responseDto.paymentChannel()).isEqualTo(PaymentChannel.ICBC.getCode());
         verify(paymentOrderRepository).findAll(any(Specification.class), any(Pageable.class));
     }
 

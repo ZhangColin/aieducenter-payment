@@ -44,6 +44,26 @@ public record PaymentOrderResponse(
     String statusName,
 
     /**
+     * 支付方式码
+     */
+    Integer payMode,
+
+    /**
+     * 支付方式名称
+     */
+    String payModeName,
+
+    /**
+     * 接入方式码
+     */
+    Integer accessType,
+
+    /**
+     * 接入方式名称
+     */
+    String accessTypeName,
+
+    /**
      * 支付金额（分）
      */
     Long amount,
@@ -57,6 +77,11 @@ public record PaymentOrderResponse(
      * 支付描述
      */
     String body,
+
+    /**
+     * 支付渠道码
+     */
+    Integer paymentChannel,
 
     /**
      * 支付渠道名称

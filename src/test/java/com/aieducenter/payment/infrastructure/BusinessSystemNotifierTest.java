@@ -32,9 +32,14 @@ class BusinessSystemNotifierTest {
             "课程购买",
             2,
             "已支付",
+            9,
+            "微信",
+            4,
+            "H5",
             10000L,
             "Python课程",
             "Python编程课程",
+            1,
             "工商银行",
             "https://qr.example.com/pay",
             "192.168.1.1",
@@ -56,8 +61,8 @@ class BusinessSystemNotifierTest {
     void notify_withBlankUrl_returnsSkippedAndDoesNotThrow() {
         PaymentOrderResponse response = new PaymentOrderResponse(
             1001L, "BIZ001", "PAY001", "TestSystem", "课程购买",
-            2, "已支付", 10000L, "Python课程", "Python编程课程",
-            "工商银行", "https://qr.example.com/pay", "192.168.1.1",
+            2, "已支付", 9, "微信", 4, "H5", 10000L, "Python课程", "Python编程课程",
+            1, "工商银行", "https://qr.example.com/pay", "192.168.1.1",
             null, null, null, null, null
         );
 

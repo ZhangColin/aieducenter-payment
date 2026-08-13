@@ -25,6 +25,12 @@ public interface PaymentOrderMapper {
      */
     @Mapping(target = "status", source = "status.code")
     @Mapping(target = "statusName", source = "status.name")
+    @Mapping(target = "payMode", source = "payMode.code")
+    @Mapping(target = "payModeName", source = "payMode.name")
+    @Mapping(target = "accessType", source = "accessType.code")
+    @Mapping(target = "accessTypeName", source = "accessType.name")
+    @Mapping(target = "paymentChannel", source = "paymentChannel.code")
+    @Mapping(target = "paymentChannelName", source = "paymentChannel.name")
     PaymentOrderResponse toResponse(PaymentOrder paymentOrder);
 
     /**
@@ -42,9 +48,14 @@ public interface PaymentOrderMapper {
             paymentOrder.getBusinessName(),
             paymentOrder.getStatus().getCode(),
             paymentOrder.getStatus().getName(),
+            paymentOrder.getPayMode() != null ? paymentOrder.getPayMode().getCode() : null,
+            paymentOrder.getPayMode() != null ? paymentOrder.getPayMode().getName() : null,
+            paymentOrder.getAccessType() != null ? paymentOrder.getAccessType().getCode() : null,
+            paymentOrder.getAccessType() != null ? paymentOrder.getAccessType().getName() : null,
             paymentOrder.getAmount(),
             paymentOrder.getSubject(),
             paymentOrder.getBody(),
+            paymentOrder.getPaymentChannel() != null ? paymentOrder.getPaymentChannel().getCode() : null,
             paymentOrder.getPaymentChannel() != null ? paymentOrder.getPaymentChannel().getName() : null,
             paymentOrder.getQrCodeUrl(),
             paymentOrder.getClientIp(),
