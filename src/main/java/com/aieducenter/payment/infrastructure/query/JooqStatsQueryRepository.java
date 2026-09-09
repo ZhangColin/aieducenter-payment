@@ -33,13 +33,17 @@ import java.util.List;
 /**
  * 统计读侧 jOOQ 实现（issue #17）。
  *
- * <p><b>不单测</b>（沿用 spec「不引入 @DataJpaTest」——查询正确性靠显式可读 SQL + 框架；
- * 装配逻辑由 {@code StatsAppServiceTest} 在 AppService 缝覆盖）。PostgreSQL 方言。</p>
+ * <p><b>测试边界</b>：不引入 @DataJpaTest（沿用 spec 约定）；装配逻辑由
+ * {@code StatsAppServiceTest} 在 AppService 缝覆盖，命名绑定的可用性由
+ * {@code JooqStatsQueryRepositoryTest} 在无 DB 的 parse+bind 缝覆盖。PostgreSQL 方言。</p>
  *
  * <p><b>列别名双引号</b>：Postgres 折叠未加引号标识符为小写，故投影列必须
  * {@code AS "orderCount"} 加双引号以保留驼峰、与投影 record 组件名一一对应（jOOQ fetchInto 按名映射）。</p>
  *
- * <p><b>绑定方式</b>：{@code from}/{@code to}/{@code *Code} 走命名绑定（防注入）；
+ * <p><b>绑定方式</b>：必须经 {@code dsl.parser().parseResultQuery(...)} 构造——plain
+ * {@code resultQuery} 不注册任何命名参数（getParams 恒空），{@code bind(name, ...)} 必抛
+ * {@code IllegalArgumentException: No such parameter}；且 parser 会把标识符折叠为小写，
+ * 故 SQL 参数名一律 <b>snake_case</b>（如 {@code :pending_code}），bind 字面量须与之逐字一致。
  * {@link StatsGranularity#sqlLiteral()} 是白名单字面量（"day"/"hour"）内联到 {@code date_trunc}
  * 首参（text literal 不能绑定）。bind 以语句形式调用以保留 {@link ResultQuery} 静态类型（fetchInto 在其上）。</p>
  */
@@ -51,7 +55,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
 
     @Override
     public List<PaymentStatusCount> countPaymentByStatus(LocalDateTime from, LocalDateTime to) {
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT status AS "status",
                        COUNT(*) AS "orderCount",
                        COALESCE(SUM(amount), 0) AS "totalAmount",
@@ -66,7 +70,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
 
     @Override
     public List<RefundStatusCount> countRefundByStatus(LocalDateTime from, LocalDateTime to) {
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT status AS "status",
                        COUNT(*) AS "orderCount",
                        COALESCE(SUM(refund_amount), 0) AS "totalAmount"
@@ -83,7 +87,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
         // status = PaymentStatus.PAID.getCode() 标记支付成功（CASE 聚合到每桶）
         int paid = PaymentStatus.PAID.getCode();
         String trunc = "date_trunc('" + granularity.sqlLiteral() + "', created_at)";
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT %s AS "bucketStart",
                        COUNT(*) AS "orderCount",
                        COALESCE(SUM(amount), 0) AS "totalAmount",
@@ -103,7 +107,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
         // status = RefundStatus.SUCCESS.getCode() 标记退款成功
         int success = RefundStatus.SUCCESS.getCode();
         String trunc = "date_trunc('" + granularity.sqlLiteral() + "', created_at)";
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT %s AS "bucketStart",
                        COUNT(*) AS "orderCount",
                        COALESCE(SUM(refund_amount), 0) AS "totalAmount",
@@ -120,7 +124,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
 
     @Override
     public List<GatewayInterfaceRollup> gatewayInterfaceRollup(LocalDateTime from, LocalDateTime to) {
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT bank_code AS "bankCode",
                        bank_interface AS "bankInterface",
                        COUNT(*) AS "totalCount",
@@ -137,7 +141,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
 
     @Override
     public List<GatewayReturnCodeCount> gatewayReturnCodeCounts(LocalDateTime from, LocalDateTime to) {
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT bank_interface AS "bankInterface",
                        return_code AS "returnCode",
                        COUNT(*) AS "codeCount"
@@ -152,37 +156,37 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
 
     @Override
     public List<AuditOperationCount> auditOperationCounts(LocalDateTime from, LocalDateTime to) {
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT operation AS "operation",
                        COUNT(*) AS "opCount"
                   FROM pay_operation_logs
                  WHERE deleted = FALSE
-                   AND operation IN (:approveCode, :rejectCode)
+                   AND operation IN (:approve_code, :reject_code)
                 """ + windowClause(from, to, "created_at", true) + """
                  GROUP BY operation
                 """);
-        q.bind("approveCode", OperationType.AUDIT_APPROVE.getCode());
-        q.bind("rejectCode", OperationType.AUDIT_REJECT.getCode());
+        q.bind("approve_code", OperationType.AUDIT_APPROVE.getCode());
+        q.bind("reject_code", OperationType.AUDIT_REJECT.getCode());
         bindWindow(q, from, to);
         return q.fetchInto(AuditOperationCount.class);
     }
 
     @Override
     public List<AuditorAuditCount> auditorAuditCounts(LocalDateTime from, LocalDateTime to) {
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT operator_id AS "auditorId",
                        operator_name AS "auditorName",
                        operation AS "operation",
                        COUNT(*) AS "opCount"
                   FROM pay_operation_logs
                  WHERE deleted = FALSE
-                   AND operation IN (:approveCode, :rejectCode)
+                   AND operation IN (:approve_code, :reject_code)
                 """ + windowClause(from, to, "created_at", true) + """
                  GROUP BY operator_id, operator_name, operation
                  ORDER BY operator_id
                 """);
-        q.bind("approveCode", OperationType.AUDIT_APPROVE.getCode());
-        q.bind("rejectCode", OperationType.AUDIT_REJECT.getCode());
+        q.bind("approve_code", OperationType.AUDIT_APPROVE.getCode());
+        q.bind("reject_code", OperationType.AUDIT_REJECT.getCode());
         bindWindow(q, from, to);
         return q.fetchInto(AuditorAuditCount.class);
     }
@@ -191,14 +195,14 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     public BigDecimal avgAuditDuration(LocalDateTime from, LocalDateTime to) {
         // 平均审核时长（分钟）= AVG(audited_at - created_at)，仅人工审核且已审结。
         // audit_type = AuditType.MANUAL.getCode()；时间窗作用在 audited_at。
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (audited_at - created_at)) / 60), 0) AS "avgDurationMinutes"
                   FROM pay_refund_orders
                  WHERE deleted = FALSE
-                   AND audit_type = :manualCode
+                   AND audit_type = :manual_code
                    AND audited_at IS NOT NULL
                 """ + windowClause(from, to, "audited_at", true));
-        q.bind("manualCode", AuditType.MANUAL.getCode());
+        q.bind("manual_code", AuditType.MANUAL.getCode());
         bindWindow(q, from, to);
         return q.fetchOne(0, BigDecimal.class);
     }
@@ -209,18 +213,18 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     public List<BusinessSystemPaymentRollup> businessSystemPaymentRollup(LocalDateTime from, LocalDateTime to) {
         // status = PaymentStatus.PAID.getCode() 标记支付成功（CASE 聚合到每组）
         // business_system_name 为 NOT NULL（V1），无需 IS NOT NULL 过滤。
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT business_system_name AS "businessSystemName",
                        COUNT(*) AS "orderCount",
                        COALESCE(SUM(amount), 0) AS "totalAmount",
-                       SUM(CASE WHEN status = :paidCode THEN 1 ELSE 0 END) AS "paidCount",
-                       COALESCE(SUM(CASE WHEN status = :paidCode THEN actual_amount ELSE 0 END), 0) AS "paidAmount"
+                       SUM(CASE WHEN status = :paid_code THEN 1 ELSE 0 END) AS "paidCount",
+                       COALESCE(SUM(CASE WHEN status = :paid_code THEN actual_amount ELSE 0 END), 0) AS "paidAmount"
                   FROM pay_payment_orders
                 """ + whereDeleted(from, to) + """
                  GROUP BY business_system_name
                  ORDER BY business_system_name
                 """);
-        q.bind("paidCode", PaymentStatus.PAID.getCode());
+        q.bind("paid_code", PaymentStatus.PAID.getCode());
         bindWindow(q, from, to);
         return q.fetchInto(BusinessSystemPaymentRollup.class);
     }
@@ -228,18 +232,18 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     @Override
     public List<BusinessSystemRefundRollup> businessSystemRefundRollup(LocalDateTime from, LocalDateTime to) {
         // status = RefundStatus.SUCCESS.getCode() 标记退款成功
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT business_system_name AS "businessSystemName",
                        COUNT(*) AS "orderCount",
                        COALESCE(SUM(refund_amount), 0) AS "totalAmount",
-                       SUM(CASE WHEN status = :successCode THEN 1 ELSE 0 END) AS "refundedCount",
-                       COALESCE(SUM(CASE WHEN status = :successCode THEN refund_amount ELSE 0 END), 0) AS "refundedAmount"
+                       SUM(CASE WHEN status = :success_code THEN 1 ELSE 0 END) AS "refundedCount",
+                       COALESCE(SUM(CASE WHEN status = :success_code THEN refund_amount ELSE 0 END), 0) AS "refundedAmount"
                   FROM pay_refund_orders
                 """ + whereDeleted(from, to) + """
                  GROUP BY business_system_name
                  ORDER BY business_system_name
                 """);
-        q.bind("successCode", RefundStatus.SUCCESS.getCode());
+        q.bind("success_code", RefundStatus.SUCCESS.getCode());
         bindWindow(q, from, to);
         return q.fetchInto(BusinessSystemRefundRollup.class);
     }
@@ -262,12 +266,12 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
      */
     private List<ChannelPaymentRollup> channelRollup(LocalDateTime from, LocalDateTime to, String column) {
         // status = PaymentStatus.PAID.getCode() 标记支付成功
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT %s AS "channelCode",
                        COUNT(*) AS "orderCount",
                        COALESCE(SUM(amount), 0) AS "totalAmount",
-                       SUM(CASE WHEN status = :paidCode THEN 1 ELSE 0 END) AS "paidCount",
-                       COALESCE(SUM(CASE WHEN status = :paidCode THEN actual_amount ELSE 0 END), 0) AS "paidAmount"
+                       SUM(CASE WHEN status = :paid_code THEN 1 ELSE 0 END) AS "paidCount",
+                       COALESCE(SUM(CASE WHEN status = :paid_code THEN actual_amount ELSE 0 END), 0) AS "paidAmount"
                   FROM pay_payment_orders
                 """.formatted(column)
                 + whereDeleted(from, to) + """
@@ -275,7 +279,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
                  GROUP BY %s
                  ORDER BY %s
                 """.formatted(column, column, column));
-        q.bind("paidCode", PaymentStatus.PAID.getCode());
+        q.bind("paid_code", PaymentStatus.PAID.getCode());
         bindWindow(q, from, to);
         return q.fetchInto(ChannelPaymentRollup.class);
     }
@@ -283,15 +287,15 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     @Override
     public StuckOrderCount longPendingPayments(long pendingHours) {
         // status = PaymentStatus.PENDING.getCode()；cutoff = NOW() - INTERVAL '1 hour' * :hours
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT COUNT(*) AS "orderCount",
                        COALESCE(SUM(amount), 0) AS "totalAmount"
                   FROM pay_payment_orders
                  WHERE deleted = FALSE
-                   AND status = :pendingCode
+                   AND status = :pending_code
                    AND created_at < NOW() - INTERVAL '1 hour' * :hours
                 """);
-        q.bind("pendingCode", PaymentStatus.PENDING.getCode());
+        q.bind("pending_code", PaymentStatus.PENDING.getCode());
         q.bind("hours", pendingHours);
         return q.fetchOneInto(StuckOrderCount.class);
     }
@@ -299,15 +303,15 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     @Override
     public StuckOrderCount longRefundingRefunds(long refundingHours) {
         // status = RefundStatus.REFUNDING.getCode()
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT COUNT(*) AS "orderCount",
                        COALESCE(SUM(refund_amount), 0) AS "totalAmount"
                   FROM pay_refund_orders
                  WHERE deleted = FALSE
-                   AND status = :refundingCode
+                   AND status = :refunding_code
                    AND created_at < NOW() - INTERVAL '1 hour' * :hours
                 """);
-        q.bind("refundingCode", RefundStatus.REFUNDING.getCode());
+        q.bind("refunding_code", RefundStatus.REFUNDING.getCode());
         q.bind("hours", refundingHours);
         return q.fetchOneInto(StuckOrderCount.class);
     }
@@ -315,7 +319,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     @Override
     public List<FailureCountByType> recentFailureCounts(long windowHours) {
         // 近期查询/回调失败：success=FALSE AND log_type IN (查询/回调三类)
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT log_type AS "logType",
                        COUNT(*) AS "failureCount"
                   FROM pay_payment_logs
@@ -335,7 +339,7 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     @Override
     public List<OperatorOperationCount> operatorOperationCounts(LocalDateTime from, LocalDateTime to) {
         // 全操作（AUDIT_APPROVE/AUDIT_REJECT/NOTIFY_RESEND）按操作员×操作类型聚合
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT operator_id AS "operatorId",
                        operator_name AS "operatorName",
                        operation AS "operation",
@@ -353,17 +357,17 @@ public class JooqStatsQueryRepository implements StatsQueryRepository {
     @Override
     public List<NotifyResendBySystem> notifyResendBySystem(LocalDateTime from, LocalDateTime to) {
         // 仅 NOTIFY_RESEND，按来源业务系统（operator_system）归组
-        ResultQuery<?> q = dsl.resultQuery("""
+        ResultQuery<?> q = dsl.parser().parseResultQuery("""
                 SELECT operator_system AS "operatorSystem",
                        COUNT(*) AS "resendCount"
                   FROM pay_operation_logs
                  WHERE deleted = FALSE
-                   AND operation = :notifyCode
+                   AND operation = :notify_code
                 """ + windowClause(from, to, "created_at", true) + """
                  GROUP BY operator_system
                  ORDER BY operator_system
                 """);
-        q.bind("notifyCode", OperationType.NOTIFY_RESEND.getCode());
+        q.bind("notify_code", OperationType.NOTIFY_RESEND.getCode());
         bindWindow(q, from, to);
         return q.fetchInto(NotifyResendBySystem.class);
     }
