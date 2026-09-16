@@ -2,22 +2,21 @@ package com.aieducenter.payment.application;
 
 import com.aieducenter.payment.application.dto.query.PaymentOrderQuery;
 import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
-import com.aieducenter.payment.application.mapper.PaymentOrderMapper;
 import com.aieducenter.payment.domain.aggregate.PaymentOrder;
 import com.aieducenter.payment.domain.enums.AccessType;
 import com.aieducenter.payment.domain.enums.PayMode;
-import com.aieducenter.payment.domain.enums.PaymentChannel;
 import com.aieducenter.payment.domain.enums.PaymentStatus;
 import com.aieducenter.payment.domain.repository.PaymentOrderRepository;
+import com.cartisan.web.request.Pagination;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -32,8 +31,10 @@ import static org.mockito.Mockito.when;
 /**
  * PaymentOrderQueryAppService 测试（AppService Mockito 缝）。
  *
- * <p>沿用 OperationLogAppServiceTest 模式：mock 仓储与 Mapper，构造被测服务直接驱动。
- * 覆盖：查询参数正确传递（Specification + Pageable）与 PageResponse 响应映射（变异友好）。</p>
+ * <p>沿用 OperationLogAppServiceTest 模式：mock 仓储，构造被测服务直接驱动。
+ * 覆盖：Pagination（wire 1-based）→ Spring 0-based PageRequest 换算（ArgumentCaptor
+ * 钉死换算变异点）与 PageResponse.of 回显（1-based、超尾页原样回显）。
+ * DTO 转换走 mapper static convert 真源，不 mock。</p>
  *
  * <p>说明：仓储 findAll 被 mock，Specification 不真正执行（不引入 @DataJpaTest，
  * 与现有代码库一致）；查询正确性靠 @Condition 注解的编译期保证与显式可读性。</p>
@@ -43,18 +44,17 @@ import static org.mockito.Mockito.when;
 class PaymentOrderQueryAppServiceTest {
 
     @Mock private PaymentOrderRepository paymentOrderRepository;
-    @Mock private PaymentOrderMapper paymentOrderMapper;
 
     private PaymentOrderQueryAppService service;
 
     @BeforeEach
     void setUp() {
-        service = new PaymentOrderQueryAppService(paymentOrderRepository, paymentOrderMapper);
+        service = new PaymentOrderQueryAppService(paymentOrderRepository);
     }
 
     @Test
-    @DisplayName("list：多条件查询分页，返回 PageResponse 且仅暴露 DTO，page 为 1-based")
-    void given_queryAndPageable_when_list_then_returnsPageResponseOfDtos() {
+    @DisplayName("list：wire page=1 转仓储 0-based 第 0 页，回显 1-based 页码 1")
+    void given_firstPage_when_list_then_repositoryGetsZeroBasedAndEchoesOneBased() {
         PaymentOrderQuery query = new PaymentOrderQuery(
             "PAY20260811", "BIZ001", "course-system",
             List.of(PaymentStatus.PAID, PaymentStatus.PENDING),
@@ -63,61 +63,86 @@ class PaymentOrderQueryAppServiceTest {
             LocalDateTime.of(2026, 8, 1, 0, 0), LocalDateTime.of(2026, 8, 11, 0, 0),
             null, null
         );
-        Pageable pageable = PageRequest.of(0, 20);
+        Pagination pagination = new Pagination(1, 20, List.of());
 
         PaymentOrder order = new PaymentOrder(
             "BIZ001", "course-system", "课程购买",
             10000L, "Python 课程", "描述",
             "https://biz.example.com/notify", "attach", 3600L
         );
-        Page<PaymentOrder> page = new PageImpl<>(List.of(order), pageable, 1);
+        order.setPayMode(PayMode.WECHAT);
+        order.setAccessType(AccessType.H5);
         when(paymentOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
-            .thenReturn(page);
+            .thenAnswer(invocation -> new PageImpl<>(List.of(order), invocation.getArgument(1), 1));
 
-        PaymentOrderResponse responseDto = new PaymentOrderResponse(
-            1L, "BIZ001", "PAY20260811", "course-system", "课程购买",
-            PaymentStatus.PAID.getCode(), PaymentStatus.PAID.getName(),
-            PayMode.WECHAT.getCode(), PayMode.WECHAT.getName(),
-            AccessType.H5.getCode(), AccessType.H5.getName(),
-            10000L, "Python 课程", "描述",
-            PaymentChannel.ICBC.getCode(), "工商银行",
-            null, "127.0.0.1", LocalDateTime.now(), null, LocalDateTime.now(),
-            "ICBC_ORDER_001", "THIRD_001"
-        );
-        when(paymentOrderMapper.convertList(List.of(order))).thenReturn(List.of(responseDto));
+        var result = service.list(query, pagination);
 
-        var result = service.list(query, pageable);
+        Pageable captured = capturedPageable();
+        assertThat(captured.getPageNumber()).isZero();   // wire 1-based → Spring 0-based（换算变异点）
+        assertThat(captured.getPageSize()).isEqualTo(20);
 
-        assertThat(result.items()).containsExactly(responseDto);
+        assertThat(result.items()).hasSize(1);
         assertThat(result.total()).isEqualTo(1L);
-        assertThat(result.page()).isEqualTo(1);          // 0-based → 1-based（+1 变异点）
+        assertThat(result.page()).isEqualTo(1);          // 回显 1-based（+1 收在 PageResponse.of）
         assertThat(result.size()).isEqualTo(20);
-        assertThat(responseDto.payMode()).isEqualTo(PayMode.WECHAT.getCode());
-        assertThat(responseDto.payModeName()).isEqualTo("微信");
-        assertThat(responseDto.accessTypeName()).isEqualTo("H5");
-        assertThat(responseDto.paymentChannel()).isEqualTo(PaymentChannel.ICBC.getCode());
-        verify(paymentOrderRepository).findAll(any(Specification.class), any(Pageable.class));
+
+        PaymentOrderResponse row = result.items().get(0);
+        assertThat(row.status()).isEqualTo(PaymentStatus.PENDING.getCode());
+        assertThat(row.statusName()).isEqualTo(PaymentStatus.PENDING.getName());
+        assertThat(row.payMode()).isEqualTo(PayMode.WECHAT.getCode());
+        assertThat(row.payModeName()).isEqualTo("微信");
+        assertThat(row.accessTypeName()).isEqualTo("H5");
     }
 
     @Test
-    @DisplayName("list：空查询条件也返回 PageResponse（Specification 不抛错）")
-    void given_emptyQuery_when_list_then_returnsPageResponse() {
+    @DisplayName("list：空查询条件 + wire page=3，转 0-based 第 2 页，超尾页原样回显 3")
+    void given_emptyQueryAndThirdPage_when_list_then_zeroBasedSecondPageAndEchoesThree() {
         PaymentOrderQuery query = new PaymentOrderQuery(
             null, null, null, null, null, null, null,
             null, null, null, null, null, null
         );
-        Pageable pageable = PageRequest.of(2, 10);
+        Pagination pagination = new Pagination(3, 10, List.of());
 
-        Page<PaymentOrder> emptyPage = new PageImpl<>(List.of(), pageable, 0);
         when(paymentOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
-            .thenReturn(emptyPage);
-        when(paymentOrderMapper.convertList(List.of())).thenReturn(List.of());
+            .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
 
-        var result = service.list(query, pageable);
+        var result = service.list(query, pagination);
+
+        Pageable captured = capturedPageable();
+        assertThat(captured.getPageNumber()).isEqualTo(2);
+        assertThat(captured.getPageSize()).isEqualTo(10);
 
         assertThat(result.items()).isEmpty();
         assertThat(result.total()).isZero();
-        assertThat(result.page()).isEqualTo(3);          // PageRequest.of(2,10) → page 3
+        assertThat(result.page()).isEqualTo(3);          // 超尾页原样回显请求页码
         assertThat(result.size()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("list：wire 越界值（page=0、size=500）按平台口径贴边 clamp 后再转 0-based")
+    void given_outOfRangePageAndSize_when_list_then_clampedBeforeConversion() {
+        PaymentOrderQuery query = new PaymentOrderQuery(
+            null, null, null, null, null, null, null,
+            null, null, null, null, null, null
+        );
+        Pagination pagination = new Pagination(0, 500, null);
+
+        when(paymentOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
+
+        var result = service.list(query, pagination);
+
+        Pageable captured = capturedPageable();
+        assertThat(captured.getPageNumber()).isZero();   // page 0 → clamp 1 → 0-based 第 0 页
+        assertThat(captured.getPageSize()).isEqualTo(100); // size 500 → clamp 100
+
+        assertThat(result.page()).isEqualTo(1);
+        assertThat(result.size()).isEqualTo(100);
+    }
+
+    private Pageable capturedPageable() {
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(paymentOrderRepository).findAll(any(Specification.class), captor.capture());
+        return captor.getValue();
     }
 }

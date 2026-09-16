@@ -4,19 +4,17 @@ import com.aieducenter.payment.application.dto.response.RefundOrderResponse;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
 import org.mapstruct.Mapper;
 
-import java.util.List;
-
 /**
  * 退款订单映射器
  *
  * <p>使用 MapStruct 进行领域对象与 DTO 之间的转换。static {@link #convert} 是全仓退款转换唯一真源
- * （被 {@code RefundAppService} 创建/审核/查询详情、{@code RefundOrderQueryAppService} 列表共用）；
- * {@link #convertList} 委托 static convert，保证列表行与详情 {@code queryRefund} 输出逐字段一致。</p>
+ * （被 {@code RefundAppService} 创建/审核/查询详情、{@code RefundOrderQueryAppService} 列表共用），
+ * 保证列表行与详情 {@code queryRefund} 输出逐字段一致。全仓均为 static 调用，不注册 spring bean。</p>
  *
  * <p>注：{@code auditType} 列可空（PENDING 态尚未发生审核动作），{@link #convert} 对
  * {@code getAuditType() == null} 空安全处理（code/name 落 null），与详情输出一致。</p>
  */
-@Mapper(componentModel = "spring")
+@Mapper
 public interface RefundOrderMapper {
 
     /**
@@ -50,15 +48,5 @@ public interface RefundOrderMapper {
             refundOrder.getBankRefundNo(),
             refundOrder.getNotifyUrl()
         );
-    }
-
-    /**
-     * 批量转换为响应 DTO（委托 static {@link #convert}，保证与详情输出一致）。
-     *
-     * @param refundOrders 退款订单聚合根列表
-     * @return 响应 DTO 列表
-     */
-    default List<RefundOrderResponse> convertList(List<RefundOrder> refundOrders) {
-        return refundOrders.stream().map(RefundOrderMapper::convert).toList();
     }
 }

@@ -7,6 +7,7 @@ import com.aieducenter.payment.domain.aggregate.OperationLog;
 import com.aieducenter.payment.domain.enums.OperationLogTargetType;
 import com.aieducenter.payment.domain.enums.OperationType;
 import com.aieducenter.payment.domain.repository.OperationLogRepository;
+import com.cartisan.web.request.Pagination;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -70,52 +69,64 @@ class OperationLogAppServiceTest {
     }
 
     @Test
-    @DisplayName("list：按查询条件分页，返回 PageResponse 且仅暴露 DTO")
-    void given_queryAndPageable_when_list_then_returnsPageResponseOfDtos() {
+    @DisplayName("list：按查询条件分页，wire page=1 转 0-based，回显 1-based 且仅暴露 DTO")
+    void given_queryAndFirstPage_when_list_then_zeroBasedConversionAndOneBasedEcho() {
         OperationLogQuery query = new OperationLogQuery(
             OperationLogTargetType.REFUND, "REF001", OperationType.AUDIT_APPROVE,
             123L, "admin-bff", "SUCCESS", null, null
         );
-        Pageable pageable = PageRequest.of(0, 20);
+        Pagination pagination = new Pagination(1, 20, List.of());
 
         OperationLog log = new OperationLog(
             OperationLogTargetType.REFUND, "REF001", OperationType.AUDIT_APPROVE,
             123L, "张三", "admin-bff", "SUCCESS", "同意退款"
         );
-        Page<OperationLog> page = new PageImpl<>(List.of(log), pageable, 1);
-        when(operationLogRepository.findAll(any(Specification.class), any(Pageable.class)))
-            .thenReturn(page);
-
         OperationLogResponse responseDto = new OperationLogResponse(
             1L, 2, "退款订单", "REF001", 1, "审核通过",
             123L, "张三", "admin-bff", "SUCCESS", "同意退款", LocalDateTime.now()
         );
-        when(operationLogMapper.convertList(List.of(log))).thenReturn(List.of(responseDto));
+        when(operationLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenAnswer(invocation -> new PageImpl<>(List.of(log), invocation.getArgument(1), 1));
+        when(operationLogMapper.convert(log)).thenReturn(responseDto);
 
-        var result = service.list(query, pageable);
+        var result = service.list(query, pagination);
+
+        Pageable captured = capturedPageable();
+        assertThat(captured.getPageNumber()).isZero();   // wire 1-based → Spring 0-based（换算变异点）
+        assertThat(captured.getPageSize()).isEqualTo(20);
 
         assertThat(result.items()).containsExactly(responseDto);
         assertThat(result.total()).isEqualTo(1L);
-        assertThat(result.page()).isEqualTo(1);
+        assertThat(result.page()).isEqualTo(1);          // 回显 1-based（+1 收在 PageResponse.of）
         assertThat(result.size()).isEqualTo(20);
     }
 
     @Test
-    @DisplayName("list：空查询条件也返回 PageResponse（Specification 不抛错）")
-    void given_emptyQuery_when_list_then_returnsPageResponse() {
+    @DisplayName("list：空查询条件 + wire page=3，转 0-based 第 2 页，超尾页原样回显 3")
+    void given_emptyQueryAndThirdPage_when_list_then_zeroBasedSecondPageAndEchoesThree() {
         OperationLogQuery query = new OperationLogQuery(
             null, null, null, null, null, null, null, null
         );
-        Pageable pageable = PageRequest.of(0, 10);
+        Pagination pagination = new Pagination(3, 10, List.of());
 
-        Page<OperationLog> emptyPage = new PageImpl<>(List.of(), pageable, 0);
         when(operationLogRepository.findAll(any(Specification.class), any(Pageable.class)))
-            .thenReturn(emptyPage);
-        when(operationLogMapper.convertList(List.of())).thenReturn(List.of());
+            .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
 
-        var result = service.list(query, pageable);
+        var result = service.list(query, pagination);
+
+        Pageable captured = capturedPageable();
+        assertThat(captured.getPageNumber()).isEqualTo(2);
+        assertThat(captured.getPageSize()).isEqualTo(10);
 
         assertThat(result.items()).isEmpty();
         assertThat(result.total()).isZero();
+        assertThat(result.page()).isEqualTo(3);          // 超尾页原样回显请求页码
+        assertThat(result.size()).isEqualTo(10);
+    }
+
+    private Pageable capturedPageable() {
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(operationLogRepository).findAll(any(Specification.class), captor.capture());
+        return captor.getValue();
     }
 }

@@ -8,10 +8,10 @@ import com.aieducenter.payment.domain.enums.OperationLogTargetType;
 import com.aieducenter.payment.domain.enums.OperationType;
 import com.aieducenter.payment.domain.repository.OperationLogRepository;
 import com.cartisan.data.jpa.specification.ConditionSpecifications;
+import com.cartisan.web.request.Pagination;
 import com.cartisan.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,17 +60,16 @@ public class OperationLogAppService {
 
     /**
      * 多条件分页查询操作日志。
+     *
+     * @param query      查询条件（null / 空字符串字段自动跳过）
+     * @param pagination 分页参数（wire 1-based；页码换算与 clamp 收在框架 {@link Pagination}）
+     * @return 分页响应（仅暴露 DTO；1-based 页码回显收在 {@link PageResponse#of}）
      */
     @Transactional(readOnly = true)
-    public PageResponse<OperationLogResponse> list(OperationLogQuery query, Pageable pageable) {
+    public PageResponse<OperationLogResponse> list(OperationLogQuery query, Pagination pagination) {
         Page<OperationLog> page = operationLogRepository.findAll(
-            ConditionSpecifications.fromAnnotation(query), pageable
+            ConditionSpecifications.fromAnnotation(query), pagination.toPageRequest()
         );
-        return new PageResponse<>(
-            operationLogMapper.convertList(page.getContent()),
-            page.getTotalElements(),
-            pageable.getPageNumber() + 1,
-            pageable.getPageSize()
-        );
+        return PageResponse.of(page.map(operationLogMapper::convert));
     }
 }

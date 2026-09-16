@@ -2,20 +2,19 @@ package com.aieducenter.payment.application;
 
 import com.aieducenter.payment.application.dto.query.RefundOrderQuery;
 import com.aieducenter.payment.application.dto.response.RefundOrderResponse;
-import com.aieducenter.payment.application.mapper.RefundOrderMapper;
 import com.aieducenter.payment.domain.aggregate.RefundOrder;
 import com.aieducenter.payment.domain.enums.AuditType;
 import com.aieducenter.payment.domain.enums.RefundStatus;
 import com.aieducenter.payment.domain.repository.RefundOrderRepository;
+import com.cartisan.web.request.Pagination;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -30,8 +29,9 @@ import static org.mockito.Mockito.when;
 /**
  * RefundOrderQueryAppService 测试（AppService Mockito 缝）。
  *
- * <p>沿用 PaymentOrderQueryAppServiceTest 模式：mock 仓储与 Mapper，构造被测服务直接驱动。
- * 覆盖：查询参数正确传递（Specification + Pageable）与 PageResponse 响应映射（变异友好）。</p>
+ * <p>沿用 PaymentOrderQueryAppServiceTest 模式：mock 仓储，构造被测服务直接驱动。
+ * 覆盖：Pagination（wire 1-based）→ Spring 0-based PageRequest 换算与 PageResponse.of 回显；
+ * DTO 转换走 mapper static convert 真源（含 auditType 空安全），不 mock。</p>
  *
  * <p>说明：仓储 findAll 被 mock，Specification 不真正执行（不引入 @DataJpaTest，
  * 与现有代码库一致）；查询正确性靠 @Condition 注解的编译期保证与显式可读性。</p>
@@ -41,18 +41,17 @@ import static org.mockito.Mockito.when;
 class RefundOrderQueryAppServiceTest {
 
     @Mock private RefundOrderRepository refundOrderRepository;
-    @Mock private RefundOrderMapper refundOrderMapper;
 
     private RefundOrderQueryAppService service;
 
     @BeforeEach
     void setUp() {
-        service = new RefundOrderQueryAppService(refundOrderRepository, refundOrderMapper);
+        service = new RefundOrderQueryAppService(refundOrderRepository);
     }
 
     @Test
-    @DisplayName("list：多条件查询分页（含 auditType/auditorId），返回 PageResponse 且仅暴露 DTO，page 为 1-based")
-    void given_queryAndPageable_when_list_then_returnsPageResponseOfDtos() {
+    @DisplayName("list：多条件查询（含 auditType/auditorId），wire page=1 转 0-based，回显 1-based")
+    void given_queryAndFirstPage_when_list_then_zeroBasedConversionAndOneBasedEcho() {
         RefundOrderQuery query = new RefundOrderQuery(
             "REF20260811", "PAY20260811", "BIZ001", "course-system",
             List.of(RefundStatus.APPROVED, RefundStatus.REFUNDING),
@@ -60,54 +59,59 @@ class RefundOrderQueryAppServiceTest {
             100L, 10000L,
             LocalDateTime.of(2026, 8, 1, 0, 0), LocalDateTime.of(2026, 8, 11, 0, 0)
         );
-        Pageable pageable = PageRequest.of(0, 20);
+        Pagination pagination = new Pagination(1, 20, List.of());
 
         RefundOrder order = new RefundOrder(
             "BIZ001", "PAY20260811", "course-system", "课程购买",
             10000L, 10000L, "用户申请退款", null, null
         );
-        Page<RefundOrder> page = new PageImpl<>(List.of(order), pageable, 1);
         when(refundOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
-            .thenReturn(page);
+            .thenAnswer(invocation -> new PageImpl<>(List.of(order), invocation.getArgument(1), 1));
 
-        RefundOrderResponse responseDto = new RefundOrderResponse(
-            1L, "BIZ001", "REF20260811", "PAY20260811", "course-system", "课程购买",
-            RefundStatus.APPROVED.getCode(), RefundStatus.APPROVED.getName(),
-            10000L, 10000L, "用户申请退款",
-            "张三", true, "同意",
-            AuditType.MANUAL.getCode(), AuditType.MANUAL.getName(),
-            LocalDateTime.now(), LocalDateTime.now(), null, null,
-            "BANK_REFUND_001", null
-        );
-        when(refundOrderMapper.convertList(List.of(order))).thenReturn(List.of(responseDto));
+        var result = service.list(query, pagination);
 
-        var result = service.list(query, pageable);
+        Pageable captured = capturedPageable();
+        assertThat(captured.getPageNumber()).isZero();   // wire 1-based → Spring 0-based（换算变异点）
+        assertThat(captured.getPageSize()).isEqualTo(20);
 
-        assertThat(result.items()).containsExactly(responseDto);
+        assertThat(result.items()).hasSize(1);
         assertThat(result.total()).isEqualTo(1L);
-        assertThat(result.page()).isEqualTo(1);          // 0-based → 1-based（+1 变异点）
+        assertThat(result.page()).isEqualTo(1);          // 回显 1-based（+1 收在 PageResponse.of）
         assertThat(result.size()).isEqualTo(20);
-        verify(refundOrderRepository).findAll(any(Specification.class), any(Pageable.class));
+
+        RefundOrderResponse row = result.items().get(0);
+        assertThat(row.status()).isEqualTo(RefundStatus.PENDING.getCode());
+        assertThat(row.statusName()).isEqualTo(RefundStatus.PENDING.getName());
+        assertThat(row.auditType()).isNull();            // PENDING 态 auditType 空安全（真源行为）
+        assertThat(row.auditTypeName()).isNull();
     }
 
     @Test
-    @DisplayName("list：空查询条件也返回 PageResponse（Specification 不抛错）")
-    void given_emptyQuery_when_list_then_returnsPageResponse() {
+    @DisplayName("list：空查询条件 + wire page=3，转 0-based 第 2 页，超尾页原样回显 3")
+    void given_emptyQueryAndThirdPage_when_list_then_zeroBasedSecondPageAndEchoesThree() {
         RefundOrderQuery query = new RefundOrderQuery(
             null, null, null, null, null, null, null, null, null, null, null
         );
-        Pageable pageable = PageRequest.of(2, 10);
+        Pagination pagination = new Pagination(3, 10, List.of());
 
-        Page<RefundOrder> emptyPage = new PageImpl<>(List.of(), pageable, 0);
         when(refundOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
-            .thenReturn(emptyPage);
-        when(refundOrderMapper.convertList(List.of())).thenReturn(List.of());
+            .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
 
-        var result = service.list(query, pageable);
+        var result = service.list(query, pagination);
+
+        Pageable captured = capturedPageable();
+        assertThat(captured.getPageNumber()).isEqualTo(2);
+        assertThat(captured.getPageSize()).isEqualTo(10);
 
         assertThat(result.items()).isEmpty();
         assertThat(result.total()).isZero();
-        assertThat(result.page()).isEqualTo(3);          // PageRequest.of(2,10) → page 3
+        assertThat(result.page()).isEqualTo(3);          // 超尾页原样回显请求页码
         assertThat(result.size()).isEqualTo(10);
+    }
+
+    private Pageable capturedPageable() {
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(refundOrderRepository).findAll(any(Specification.class), captor.capture());
+        return captor.getValue();
     }
 }

@@ -12,6 +12,7 @@ import com.aieducenter.payment.application.dto.response.PaymentOrderResponse;
 import com.aieducenter.payment.application.dto.response.PrepayOrderResponse;
 import com.cartisan.core.context.RequestContext;
 import com.cartisan.openapi.annotation.RequireSignature;
+import com.cartisan.web.request.Pagination;
 import com.cartisan.web.response.ApiResponse;
 import com.cartisan.web.response.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,8 +21,6 @@ import com.cartisan.web.util.IpUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -66,12 +65,13 @@ public class PaymentApiV1Controller {
 
     @GetMapping
     @RequireSignature
-    @Operation(summary = "分页查询支付订单")
+    @Operation(summary = "分页查询支付订单",
+        description = "分页全链 1-based：page 从 1 起（缺省 1），size 缺省 20、clamp 至 [1,100]；响应回显 page 同为 1-based")
     public ApiResponse<PageResponse<PaymentOrderResponse>> list(
             PaymentOrderQuery query,
-            @PageableDefault(size = 20) Pageable pageable
+            Pagination pagination
     ) {
-        return ApiResponse.ok(paymentOrderQueryAppService.list(query, pageable));
+        return ApiResponse.ok(paymentOrderQueryAppService.list(query, pagination));
     }
 
     @GetMapping("/{paymentOrderNo}")
